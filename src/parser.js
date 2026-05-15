@@ -25,7 +25,10 @@ export const mapRisk = p => {
 
 export const inferCat = (tema, obj = '') => {
   const t = norm(tema + ' ' + obj)
-  if (/app|email|onboarding|esim|kyc|digital|campan|redes|notipush|webview|comunicaci|cvm|metricas|dracarys|grifo|login|registro/.test(t))
+  // CVM takes priority — campaigns, retention, loyalty, upsell
+  if (/\bcvm\b|retencion|retention|fideliz|upgrade|downsell|upsell|loyalty|campana cvm|campaña cvm|ciclo de vida|cdv/.test(t))
+    return 'cvm'
+  if (/app|email|onboarding|esim|kyc|digital|campan|redes|notipush|webview|comunicaci|metricas|dracarys|grifo|login|registro/.test(t))
     return 'product'
   if (/frontal|kiosco|retail|bpmn|manual|plataforma|sistema|atc|vending|panel|distribuidor/.test(t))
     return 'tools'
@@ -68,6 +71,33 @@ export function parseSheetValues(allValues) {
   }
   if (heads && rows.length) tables.push({ heads, rows })
   return tables
+}
+
+export function parseCampanas(tables) {
+  const t = tables.find(t => t.heads.some(h => norm(h) === 'pyname'))
+  if (!t) return []
+  const hFind = key => t.heads.find(h => norm(h) === key) || key
+  const fFecha     = hFind('fecha')
+  const fPyname    = hFind('pyname')
+  const fTipo      = hFind('tipo')
+  const fAudiencia = hFind('audiencia')
+  const fVolumen   = hFind('volumen')
+  const fCopy      = hFind('copy')
+  const fCanal     = hFind('canal')
+  const fEstado    = hFind('estado')
+  return t.rows
+    .filter(r => r[fPyname] && r[fPyname].trim())
+    .map(r => ({
+      id:        Math.random().toString(36).slice(2, 9),
+      fecha:     r[fFecha]     || '',
+      pyname:    r[fPyname]    || '',
+      tipo:      r[fTipo]      || '',
+      audiencia: r[fAudiencia] || '',
+      volumen:   r[fVolumen]   || '',
+      copy:      r[fCopy]      || '',
+      canal:     r[fCanal]     || 'SMS',
+      estado:    r[fEstado]    || 'Planificado',
+    }))
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9)
