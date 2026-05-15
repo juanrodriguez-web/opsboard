@@ -668,14 +668,55 @@ const Reporte = ({ items }) => {
         enCurso:items.filter(i=>i.propietario===p&&i.status==='inprogress').length,
       })),
     }
-    const fi = fmt==='email'
-      ? 'Formato email ejecutivo, texto plano, tono profesional, máximo 350 palabras.'
-      : 'Formato bullets concisos para reunión de 5 min, máximo 20 bullets.'
+    const SYSTEM_EJECUTIVO = `Actúa como un Director de PMO, Program Manager senior y consultor de comunicación ejecutiva especializado en reporting para dirección.
+Tu objetivo es transformar información operativa desordenada proveniente de un OpsBoard semanal en un resumen ejecutivo claro, estratégico y orientado a negocio.
+Tu trabajo NO es copiar tareas. Tu trabajo es interpretar la información y convertirla en un resumen ejecutivo de alto nivel que transmita: control, avance real, capacidad de ejecución, gestión de riesgos y foco en impacto negocio.
+Reglas importantes:
+- NO hagas listas infinitas de tareas.
+- NO copies literalmente textos del OpsBoard salvo que sea necesario.
+- NO uses lenguaje excesivamente técnico.
+- Resume y agrupa iniciativas relacionadas.
+- Prioriza impacto y avance por encima de actividad.
+- Si detectas riesgos, dependencias o bloqueos, destácalos claramente.
+- Si algo parece importante para dirección aunque no esté explícitamente indicado, interprétalo y destácalo.
+- El tono debe ser ejecutivo, profesional, claro y directo.
+- Evita frases vacías o demasiado "corporativas".
+- El resultado debe poder leerse en menos de 3 minutos.
+
+Estructura obligatoria de salida:
+
+## Resumen Ejecutivo Semanal
+
+### Estado General
+Indica el estado global: 🟢 En línea / 🟡 Con riesgos controlados / 🔴 Requiere atención
+Añade un párrafo ejecutivo de 3-5 líneas resumiendo la situación general, foco principal de la semana y percepción global del avance.
+
+### Principales avances de la semana
+Resume únicamente los avances relevantes para negocio, operación, cliente, despliegue o experiencia usuario. Agrupa por iniciativas. Cada punto debe explicar qué se avanzó, por qué es importante y cuál es el impacto.
+
+### Riesgos / Bloqueos / Dependencias
+Detalla riesgos detectados, dependencias con terceros, posibles impactos, retrasos o validaciones pendientes. Indica si están controlados o requieren escalado.
+
+### Próximos pasos
+Resume los focos principales de la próxima semana de forma ejecutiva. No pongas micro tareas operativas.
+
+### Decisiones o soporte requerido
+Incluye solo si aplica: decisiones pendientes, validaciones necesarias, aprobaciones o soporte requerido por dirección.
+
+### Logros destacados *(opcional)*
+Incluye solo si hubo hitos reales: cierres, desbloqueos relevantes, mejoras de experiencia, avances estratégicos o hitos de despliegue.
+
+Formato: muy limpio, fácil de escanear, orientado a dirección, máximo 1 página.`
+
+    const SYSTEM_BULLETS = `Eres un Program Manager senior. Prepara un resumen para standup o reunión de 5 minutos.
+Formato bullets concisos, máximo 20 bullets agrupados por: Estado general, Avances clave, Riesgos/bloqueos, Próximos pasos.
+Sin tecnicismos, orientado a impacto negocio, directo.`
+
     try {
       const r = await callClaude({
-        model:'claude-sonnet-4-20250514', max_tokens:1200,
-        system:`Eres el responsable de producto digital prepago de Vodafone España. ${fi} Estructura: 1) Resumen ejecutivo, 2) Estado por áreas, 3) Equipo, 4) Riesgos/bloqueos, 5) Próximos pasos.`,
-        messages:[{ role:'user', content:`Datos:\n${JSON.stringify(stats,null,2)}` }],
+        model:'claude-sonnet-4-20250514', max_tokens:1800,
+        system: fmt === 'email' ? SYSTEM_EJECUTIVO : SYSTEM_BULLETS,
+        messages:[{ role:'user', content:`Datos del OpsBoard semanal:\n${JSON.stringify(stats,null,2)}` }],
       })
       setTxt(r)
     } catch { setTxt('Error al generar.') }
@@ -689,7 +730,7 @@ const Reporte = ({ items }) => {
       <h2 style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>📋 Reporte Semanal</h2>
       <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
         <span style={{ fontSize:12, color:C.muted }}>Formato:</span>
-        {[{ id:'email', l:'📧 Email' },{ id:'bullets', l:'• Bullets' }].map(f => (
+        {[{ id:'email', l:'📊 Ejecutivo dirección' },{ id:'bullets', l:'• Bullets standup' }].map(f => (
           <button key={f.id} onClick={() => setFmt(f.id)}
             style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:`1px solid ${C.border}`,
               background:fmt===f.id?C.accent+'22':C.card, color:fmt===f.id?C.accent:C.muted, cursor:'pointer' }}>{f.l}</button>
