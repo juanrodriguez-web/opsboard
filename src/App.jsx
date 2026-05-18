@@ -3,7 +3,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { parseSheetValues, buildItems, parseCampanas, norm } from './parser.js'
+import { parseSheetValues, buildItems, parseCampanas, parseProyectos, norm } from './parser.js'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
@@ -99,10 +99,11 @@ async function fetchAll() {
   const res = await fetch('/api/data')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const { values } = await res.json()
-  const tables  = parseSheetValues(values)
-  const items   = applyOverrides(buildItems(tables))
+  const tables   = parseSheetValues(values)
+  const items    = applyOverrides(buildItems(tables))
   const campanas = parseCampanas(tables)
-  return { items, campanas }
+  const proyectos = parseProyectos(tables)
+  return { items, campanas, proyectos }
 }
 
 async function apiUpdate(tema, estado, notas) {
@@ -294,14 +295,19 @@ const FRAN_NORM  = norm('francisco toledo')
 
 const Dashboard = ({ allItems }) => {
   const [dashOwn, setDashOwn] = useState(() => localStorage.getItem('obs-dash-own') || 'team')
+  const [dashCat, setDashCat] = useState(() => localStorage.getItem('obs-dash-cat') || 'all')
 
   const setOwn = v => { setDashOwn(v); localStorage.setItem('obs-dash-own', v) }
+  const setCat = v => { setDashCat(v); localStorage.setItem('obs-dash-cat', v) }
 
   const items = allItems.filter(i => {
     const p = norm(i.propietario)
-    if (dashOwn === 'juan')      return p === JUAN_NORM
-    if (dashOwn === 'francisco') return p === FRAN_NORM
-    return p !== MARIA_NORM  // 'team' = Juan + Francisco
+    const ownerOk =
+      dashOwn === 'juan'      ? p === JUAN_NORM :
+      dashOwn === 'francisco' ? p === FRAN_NORM :
+      p !== MARIA_NORM
+    const catOk = dashCat === 'all' || i.category === dashCat
+    return ownerOk && catOk
   })
 
   // Team bar always shows Juan vs Francisco (ignores dashOwn filter)
@@ -345,6 +351,21 @@ const Dashboard = ({ allItems }) => {
               style={{ padding:'5px 14px', borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer',
                 border:`1.5px solid ${on?col:C.border}`, background:on?col+'22':C.card, color:on?col:C.muted }}>
               {t.l}{t.hint && <span style={{ fontSize:10, opacity:.6, marginLeft:4 }}>{t.hint}</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Category filter */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, flexWrap:'wrap' }}>
+        <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'.07em' }}>Área:</span>
+        {[{ id:'all', label:'Todas', color:C.muted }, ...CATS].map(c => {
+          const on = dashCat === c.id
+          return (
+            <button key={c.id} onClick={() => setCat(c.id)}
+              style={{ padding:'4px 12px', borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer',
+                border:`1.5px solid ${on?(c.color||C.accent):C.border}`, background:on?(c.color||C.accent)+'22':C.card, color:on?(c.color||C.accent):C.muted }}>
+              {c.label}
             </button>
           )
         })}
@@ -578,6 +599,146 @@ const CampanasCVM = ({ campanas }) => {
   )
 }
 
+// ── Proyectos ─────────────────────────────────────────────────────────────────
+const Proyectos = ({ proyectos, allItems }) => {
+  const [filtSt,   setFiltSt]   = useState('all')
+  const [expanded, setExpanded] = useState(null)
+
+  const temasOf = nombre => allItems.filter(i => norm(i.proyecto||'') === norm(nombre))
+
+  const filtered = proyectos.filter(p => filtSt === 'all' || p.status === filtSt)
+
+  if (proyectos.length === 0) return (
+    <div style={{ paddingTop:24, maxWidth:600 }}>
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:32, textAlign:'center' }}>
+        <div style={{ fontSize:36, marginBottom:12 }}>🗂️</div>
+        <h3 style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:8 }}>No hay proyectos todavía</h3>
+        <p style={{ fontSize:13, color:C.muted, lineHeight:1.7 }}>
+          Añade proyectos en la pestaña <b style={{ color:C.text }}>Proyectos</b> del Sheet y pulsa 🔄 para recargar.
+        </p>
+      </div>
+    </div>
+  )
+
+  // KPIs globales
+  const totalTemas  = allItems.filter(i => i.proyecto).length
+  const sinProyecto = allItems.filter(i => !i.proyecto).length
+
+  return (
+    <div style={{ paddingTop:16 }}>
+      {/* Resumen global */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
+        {[
+          { l:'Proyectos',    v:proyectos.length,                                          c:C.accent },
+          { l:'Temas vinc.',  v:totalTemas,                                                c:'#818cf8' },
+          { l:'Sin proyecto', v:sinProyecto,                                               c:C.muted  },
+          { l:'Completados',  v:proyectos.filter(p=>p.status==='done').length,             c:'#34d399' },
+        ].map((k,i) => (
+          <div key={i} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px' }}>
+            <div style={{ fontSize:26, fontWeight:700, color:k.c, lineHeight:1 }}>{k.v}</div>
+            <div style={{ fontSize:10, color:C.muted, marginTop:5, fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em' }}>{k.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtro estado */}
+      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
+        {[{id:'all',label:'Todos',color:C.muted},...ST].map(s => {
+          const id  = s.id
+          const on  = filtSt === id
+          const col = s.color || C.muted
+          const cnt = id==='all' ? proyectos.length : proyectos.filter(p=>p.status===id).length
+          return (
+            <button key={id} onClick={() => setFiltSt(id)}
+              style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer',
+                border:`1.5px solid ${on?col:C.border}`, background:on?col+'22':C.card, color:on?col:C.muted }}>
+              {s.label} <span style={{ opacity:.65 }}>{cnt}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:14 }}>
+        {filtered.map(p => {
+          const temas   = temasOf(p.nombre)
+          const done    = temas.filter(t => t.status==='done').length
+          const blocked = temas.filter(t => t.status==='blocked').length
+          const pct     = temas.length > 0 ? Math.round(done/temas.length*100) : 0
+          const oc      = ownerColor(p.propietario)
+          const isOpen  = expanded === p.nombre
+          // dominant category color among linked temas
+          const catCounts = CATS.map(c => ({ c, n:temas.filter(t=>t.category===c.id).length })).sort((a,b)=>b.n-a.n)
+          const accentCol = catCounts[0]?.n > 0 ? catCounts[0].c.color : C.accent
+
+          return (
+            <div key={p.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden' }}>
+              {/* Header */}
+              <div onClick={() => setExpanded(isOpen?null:p.nombre)} style={{ padding:'14px 16px', cursor:'pointer', borderLeft:`3px solid ${accentCol}` }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:8 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:C.text, lineHeight:1.3 }}>{p.nombre}</div>
+                    {p.descripcion && <div style={{ fontSize:11, color:C.muted, marginTop:3, lineHeight:1.5 }}>{p.descripcion.slice(0,90)}{p.descripcion.length>90?'…':''}</div>}
+                  </div>
+                  <Tag id={p.status} type="st" />
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                  {p.propietario && (
+                    <div style={{ width:18, height:18, borderRadius:'50%', background:oc+'28', border:`1.5px solid ${oc}66`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:oc }}>{iniciales(p.propietario)}</div>
+                  )}
+                  {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:RK.find(r=>r.id===p.risk)?.color+'22', color:RK.find(r=>r.id===p.risk)?.color }}>{p.prioridad}</span>}
+                  {p.fechaFin && <AlertFecha endDate={p.fechaFin} status={p.status} />}
+                  <span style={{ fontSize:10, color:C.muted, marginLeft:'auto' }}>
+                    {temas.length} tema{temas.length!==1?'s':''} {blocked>0&&<span style={{ color:'#f43f5e' }}>· {blocked} bloq.</span>}
+                  </span>
+                  <span style={{ fontSize:12, color:C.muted }}>{isOpen?'▲':'▼'}</span>
+                </div>
+                {/* Barra de progreso */}
+                {temas.length > 0 && (
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                      <div style={{ display:'flex', gap:8 }}>
+                        {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; return n?<span key={s.id} style={{ fontSize:9, color:s.color }}>{n} {s.label}</span>:null })}
+                      </div>
+                      <span style={{ fontSize:9, fontWeight:700, color:accentCol }}>{pct}%</span>
+                    </div>
+                    <div style={{ height:5, background:C.surface, borderRadius:3, overflow:'hidden', display:'flex', gap:1 }}>
+                      {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; const w=temas.length>0?n/temas.length*100:0; return w>0?<div key={s.id} style={{ width:`${w}%`, background:s.color, transition:'width .3s' }}/>:null })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Temas expandidos */}
+              {isOpen && (
+                <div style={{ borderTop:`1px solid ${C.border}`, background:C.surface }}>
+                  {temas.length === 0
+                    ? <div style={{ padding:'12px 16px', textAlign:'center', color:C.muted, fontSize:12 }}>
+                        Sin temas vinculados. Escribe el nombre del proyecto en la columna "Proyecto" de cada Tema.
+                      </div>
+                    : temas.map(t => {
+                        const st  = ST.find(s=>s.id===t.status)
+                        const cat = CATS.find(c=>c.id===t.category)
+                        return (
+                          <div key={t.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12 }}>
+                            <div style={{ width:3, height:16, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
+                            <span style={{ flex:1, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
+                            <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
+                            <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{(t.propietario||'').split(' ')[0]}</span>
+                          </div>
+                        )
+                      })
+                  }
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── IA Intake ─────────────────────────────────────────────────────────────────
 const IAIntake = ({ onAdd }) => {
   const [txt, setTxt]         = useState('')
@@ -761,7 +922,7 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
 }
 
 // ── Nuevo Tema modal ──────────────────────────────────────────────────────────
-const NuevoTema = ({ onAdd, onClose }) => {
+const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
   const [tema,  setTema]  = useState('')
   const [obj,   setObj]   = useState('')
   const [cat,   setCat]   = useState('projects')
@@ -832,8 +993,11 @@ const NuevoTema = ({ onAdd, onClose }) => {
           </div>
           <div>
             <Lbl>Proyecto (opcional)</Lbl>
-            <input value={proy} onChange={e=>setProy(e.target.value)} placeholder="Nombre del proyecto al que pertenece…"
-              style={inputSt} />
+            <input list="proyectos-list-nuevo" value={proy} onChange={e=>setProy(e.target.value)}
+              placeholder="Nombre del proyecto al que pertenece…" style={inputSt} />
+            <datalist id="proyectos-list-nuevo">
+              {proyectoNames.map(n=><option key={n} value={n}/>)}
+            </datalist>
           </div>
         </div>
         <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end', gap:8 }}>
@@ -851,7 +1015,7 @@ const KNOWN_OWNERS = [
 ]
 const PRIORIDADES = ['','P0','P1','P2','P3']
 
-const ModalItem = ({ item, onClose, onItemChange }) => {
+const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
   const [newSt,    setNewSt]    = useState(item.status)
   const [newProp,  setNewProp]  = useState(item.propietario || '')
   const [newPrio,  setNewPrio]  = useState(item.prioridad  || '')
@@ -952,9 +1116,12 @@ const ModalItem = ({ item, onClose, onItemChange }) => {
 
             <div style={{ gridColumn:'1/-1' }}>
               <Lbl>Proyecto</Lbl>
-              <input value={newProy} onChange={e=>setNewProy(e.target.value)}
+              <input list="proyectos-list-modal" value={newProy} onChange={e=>setNewProy(e.target.value)}
                 placeholder="Nombre del proyecto al que pertenece (opcional)…"
                 style={inputSt} />
+              <datalist id="proyectos-list-modal">
+                {proyectoNames.map(n=><option key={n} value={n}/>)}
+              </datalist>
             </div>
           </div>
 
@@ -1033,6 +1200,7 @@ export default function OpsBoard() {
   const [vista,       setVista]      = useState('Tablero')
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
+  const [proyectos,   setProyectos]  = useState([])
   const [localItems,  setLocalItems] = useState([])
   const [loading,     setLoading]    = useState(true)
   const [error,       setError]      = useState(null)
@@ -1049,9 +1217,10 @@ export default function OpsBoard() {
   const loadData = async () => {
     setLoading(true); setError(null)
     try {
-      const { items: fetched, campanas: fetchedCamps } = await fetchAll()
+      const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys } = await fetchAll()
       setItems(fetched)
       setCampanas(fetchedCamps)
+      setProyectos(fetchedProys)
       setLastUpd(new Date())
     } catch (e) {
       setError(e.message || String(e))
@@ -1072,7 +1241,7 @@ export default function OpsBoard() {
     onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
   }
 
-  const VISTAS = ['Tablero','Dashboard','📅 Campañas CVM','✨ IA Intake','📋 Reporte Semanal']
+  const VISTAS = ['Tablero','🗂️ Proyectos','Dashboard','📅 Campañas CVM','✨ IA Intake','📋 Reporte Semanal']
 
   return (
     <div style={{ background:C.bg, minHeight:'100vh', color:C.text, fontFamily:'system-ui,sans-serif' }}>
@@ -1127,6 +1296,7 @@ export default function OpsBoard() {
                 owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                 onNuevo={() => setShowNuevo(true)} />
             )}
+            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} />}
             {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
             {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
             {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
@@ -1138,11 +1308,13 @@ export default function OpsBoard() {
       {showNuevo && (
         <NuevoTema
           onAdd={item => setLocalItems(p => [...p, item])}
-          onClose={() => setShowNuevo(false)} />
+          onClose={() => setShowNuevo(false)}
+          proyectoNames={proyectos.map(p => p.nombre)} />
       )}
       {itemActivo && (
         <ModalItem item={itemActivo} onClose={() => setItemActivo(null)}
-          onItemChange={(id, fields) => { onItemChange(id, fields); setItemActivo(null) }} />
+          onItemChange={(id, fields) => { onItemChange(id, fields); setItemActivo(null) }}
+          proyectoNames={proyectos.map(p => p.nombre)} />
       )}
     </div>
   )

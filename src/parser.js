@@ -102,6 +102,40 @@ export function parseCampanas(tables) {
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
+export function parseProyectos(tables) {
+  // Detect Proyectos table: has 'nombre' header but not 'pyname' (campañas) nor 'objetivo' (temas)
+  const t = tables.find(t =>
+    t.heads.some(h => norm(h) === 'nombre') &&
+    !t.heads.some(h => norm(h) === 'pyname') &&
+    !t.heads.some(h => norm(h) === 'objetivo')
+  )
+  if (!t) return []
+  const col = key => t.heads.find(h => norm(h) === norm(key)) || ''
+  const fNombre = col('Nombre')
+  const fDesc   = col('Descripción') || col('Descripcion')
+  const fEstado = col('Estado')
+  const fPrio   = col('Prioridad')
+  const fProp   = col('Propietario')
+  const fIni    = col('Fecha inicio')
+  const fFin    = col('Fecha fin')
+  const fNotas  = col('Notas')
+  return t.rows
+    .filter(r => fNombre && r[fNombre]?.trim())
+    .map(r => ({
+      id:          uid(),
+      nombre:      r[fNombre]             || '',
+      descripcion: fDesc  ? r[fDesc]  || '' : '',
+      estado:      fEstado? r[fEstado]|| 'No iniciado' : 'No iniciado',
+      status:      mapSt(fEstado ? r[fEstado] || '' : ''),
+      prioridad:   fPrio  ? r[fPrio]  || '' : '',
+      risk:        mapRisk(fPrio ? r[fPrio] || '' : ''),
+      propietario: fProp  ? r[fProp]  || '' : '',
+      fechaInicio: parseFecha(fIni ? r[fIni] || '' : ''),
+      fechaFin:    parseFecha(fFin ? r[fFin] || '' : ''),
+      notas:       fNotas ? r[fNotas] || '' : '',
+    }))
+}
+
 export function buildItems(tables) {
   const temasT = tables.find(t =>
     t.heads.includes('Objetivo') &&
@@ -150,6 +184,7 @@ export function buildItems(tables) {
         fechaFin:    parseFecha(r['Fecha de finalización'] || ''),
         archivos:    r['Archivos relacionados'] || '',
         notas:       r['Notas'] || '',
+        proyecto:    r['Proyecto'] || '',
         subtareas:   subMap[k] || [],
       }
     })
