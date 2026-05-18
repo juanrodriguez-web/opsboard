@@ -195,7 +195,7 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
 }
 
 // ── Tablero ──────────────────────────────────────────────────────────────────
-const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo }) => {
+const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo }) => {
   const f = items.filter(i => catF==='all'||i.category===catF).filter(i => asF==='all'||norm(i.propietario)===norm(asF))
   return (
     <div>
@@ -218,7 +218,13 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
           <option value="all">Todos</option>
           {owners.map(o => <option key={o} value={o}>{o.split(' ')[0]}</option>)}
         </select>
-        <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
+        <div style={{ display:'flex', gap:4, marginLeft:'auto', alignItems:'center' }}>
+          <button onClick={onNuevo}
+            style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:700, border:`1px solid ${C.accent}55`,
+              background:C.accent+'22', color:C.accent, cursor:'pointer' }}>
+            ➕ Nuevo tema
+          </button>
+          <div style={{ width:1, height:18, background:C.border }} />
           {[{ id:'kanban', l:'⊞ Kanban' }, { id:'list', l:'☰ Lista' }].map(v => (
             <button key={v.id} onClick={() => setModo(v.id)}
               style={{ padding:'5px 10px', borderRadius:6, fontSize:12, border:`1px solid ${C.border}`,
@@ -584,13 +590,18 @@ const IAIntake = ({ onAdd }) => {
     setBusy(true); setErr(''); setPending(null)
     try {
       const raw = await callClaude({
-        model:'claude-sonnet-4-20250514', max_tokens:1000,
-        system:'Extrae tareas del texto. SOLO JSON:\n{"items":[{"category":"projects|product|tools|cvm","title":"string","description":"string","subtasks":["string"],"risk":"green|yellow|red","endDate":"YYYY-MM-DD|null"}]}',
+        model:'claude-haiku-4-5-20251001', max_tokens:1200,
+        system:'Extrae tareas del texto. Responde ÚNICAMENTE con JSON válido, sin texto adicional ni bloques de código:\n{"items":[{"category":"projects|product|tools|cvm","title":"string","description":"string","subtasks":["string"],"risk":"green|yellow|red","endDate":"YYYY-MM-DD or null}]}',
         messages:[{ role:'user', content:txt }],
       })
-      const p = JSON.parse(raw.replace(/```json|```/g,'').trim())
+      // strip markdown code fences if present
+      const clean = raw.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim()
+      let p
+      try { p = JSON.parse(clean) }
+      catch(e) { setErr(`No se pudo parsear la respuesta: ${e.message}\n\n${clean.slice(0,200)}`); setBusy(false); return }
+      if (!p.items?.length) { setErr('La IA no detectó tareas en el texto. Prueba con un texto más descriptivo.'); setBusy(false); return }
       setPending((p.items||[]).map(i => ({ ...i, assignee:'' })))
-    } catch { setErr('Error procesando el texto.') }
+    } catch(e) { setErr(`Error llamando a la API: ${e.message}`) }
     setBusy(false)
   }
 
@@ -712,7 +723,7 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
 
     try {
       const r = await callClaude({
-        model:'claude-sonnet-4-20250514', max_tokens:1800,
+        model:'claude-sonnet-4-6', max_tokens:1800,
         system: fmt === 'email' ? SYSTEM_EJECUTIVO : SYSTEM_BULLETS,
         messages:[{ role:'user', content:`Datos del OpsBoard semanal:\n${JSON.stringify(stats,null,2)}` }],
       })
@@ -749,6 +760,91 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
   )
 }
 
+// ── Nuevo Tema modal ──────────────────────────────────────────────────────────
+const NuevoTema = ({ onAdd, onClose }) => {
+  const [tema,  setTema]  = useState('')
+  const [obj,   setObj]   = useState('')
+  const [cat,   setCat]   = useState('projects')
+  const [prop,  setProp]  = useState('')
+  const [prio,  setPrio]  = useState('')
+  const [fecha, setFecha] = useState('')
+  const [proy,  setProy]  = useState('')
+
+  const inputSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+
+  const guardar = () => {
+    if (!tema.trim()) return
+    onAdd({
+      id: uid(), tema: tema.trim(), objetivo: obj.trim(),
+      category: cat, propietario: prop.trim(),
+      prioridad: prio, risk: mapRisk(prio),
+      status: 'pending', estadoSheet: 'No iniciado',
+      fechaInicio: null, fechaFin: fecha || null,
+      proyecto: proy.trim(),
+      archivos: '', notas: 'Creado manualmente en OpsBoard',
+      subtareas: [], _local: true,
+    })
+    onClose()
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target===e.currentTarget&&onClose()}>
+      <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:580, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:16 }}>➕</span>
+          <h3 style={{ flex:1, fontSize:15, fontWeight:700, color:C.text }}>Nuevo tema</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18 }}>✕</button>
+        </div>
+        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <Lbl>Tema *</Lbl>
+            <input value={tema} onChange={e=>setTema(e.target.value)} placeholder="Nombre del tema…"
+              style={inputSt} autoFocus
+              onKeyDown={e=>e.key==='Enter'&&guardar()} />
+          </div>
+          <div>
+            <Lbl>Objetivo</Lbl>
+            <TA value={obj} onChange={setObj} placeholder="Qué se quiere conseguir…" rows={2} />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div>
+              <Lbl>Categoría</Lbl>
+              <Sel value={cat} onChange={setCat} opts={CATS.map(c=>({v:c.id,l:c.label}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <Lbl>Prioridad</Lbl>
+              <Sel value={prio} onChange={setPrio} opts={PRIORIDADES.map(p=>({v:p,l:p||'Sin prioridad'}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <Lbl>Propietario</Lbl>
+              <input list="owners-list-nuevo" value={prop} onChange={e=>setProp(e.target.value)}
+                placeholder="Nombre…" style={inputSt} />
+              <datalist id="owners-list-nuevo">
+                {KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}
+              </datalist>
+            </div>
+            <div>
+              <Lbl>Fecha fin</Lbl>
+              <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
+                style={{ ...inputSt, colorScheme:'dark' }} />
+            </div>
+          </div>
+          <div>
+            <Lbl>Proyecto (opcional)</Lbl>
+            <input value={proy} onChange={e=>setProy(e.target.value)} placeholder="Nombre del proyecto al que pertenece…"
+              style={inputSt} />
+          </div>
+        </div>
+        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end', gap:8 }}>
+          <Btn v="sec" onClick={onClose}>Cancelar</Btn>
+          <Btn onClick={guardar} disabled={!tema.trim()}>➕ Crear tema</Btn>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal item ────────────────────────────────────────────────────────────────
 const KNOWN_OWNERS = [
   'Juan Rodriguez Peisel','Francisco Toledo','Nacho Cruz','Maria Garcia',
@@ -760,6 +856,7 @@ const ModalItem = ({ item, onClose, onItemChange }) => {
   const [newProp,  setNewProp]  = useState(item.propietario || '')
   const [newPrio,  setNewPrio]  = useState(item.prioridad  || '')
   const [newFecha, setNewFecha] = useState(fdStr(item.fechaFin) || '')
+  const [newProy,  setNewProy]  = useState(item.proyecto   || '')
   const [nc,       setNc]       = useState('')
   const [saving,   setSaving]   = useState(false)
 
@@ -767,10 +864,11 @@ const ModalItem = ({ item, onClose, onItemChange }) => {
   const localComments = getComments(norm(item.tema))
 
   const hasChanges =
-    newSt    !== item.status           ||
+    newSt    !== item.status            ||
     newProp  !== (item.propietario||'') ||
     newPrio  !== (item.prioridad||'')   ||
-    newFecha !== (fdStr(item.fechaFin)||'')
+    newFecha !== (fdStr(item.fechaFin)||'') ||
+    newProy  !== (item.proyecto||'')
 
   const guardar = async () => {
     if (!hasChanges) { onClose(); return }
@@ -784,6 +882,7 @@ const ModalItem = ({ item, onClose, onItemChange }) => {
     if (newProp  !== (item.propietario||'')) fields.propietario = newProp
     if (newPrio  !== (item.prioridad||''))   { fields.prioridad = newPrio; fields.risk = mapRisk(newPrio) }
     if (newFecha !== (fdStr(item.fechaFin)||'')) fields.fechaFin = newFecha || null
+    if (newProy  !== (item.proyecto||''))       fields.proyecto = newProy
     saveOverride(norm(item.tema), fields)
     onItemChange(item.id, fields)
     setSaving(false); onClose()
@@ -849,6 +948,13 @@ const ModalItem = ({ item, onClose, onItemChange }) => {
               <Lbl>Fecha fin</Lbl>
               <input type="date" value={newFecha} onChange={e=>setNewFecha(e.target.value)}
                 style={{ ...inputSt, colorScheme:'dark' }} />
+            </div>
+
+            <div style={{ gridColumn:'1/-1' }}>
+              <Lbl>Proyecto</Lbl>
+              <input value={newProy} onChange={e=>setNewProy(e.target.value)}
+                placeholder="Nombre del proyecto al que pertenece (opcional)…"
+                style={inputSt} />
             </div>
           </div>
 
@@ -932,6 +1038,7 @@ export default function OpsBoard() {
   const [error,       setError]      = useState(null)
   const [lastUpd,     setLastUpd]    = useState(null)
   const [itemActivo,  setItemActivo] = useState(null)
+  const [showNuevo,   setShowNuevo]  = useState(false)
   const [catF,        setCatF]       = useState('all')
   const [asF,         setAsF]        = useState('all')
   const [modo,        setModo]       = useState('kanban')
@@ -1017,7 +1124,8 @@ export default function OpsBoard() {
           <>
             {vista === 'Tablero' && (
               <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
-                owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo} />
+                owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
+                onNuevo={() => setShowNuevo(true)} />
             )}
             {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
             {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
@@ -1027,6 +1135,11 @@ export default function OpsBoard() {
         )}
       </div>
 
+      {showNuevo && (
+        <NuevoTema
+          onAdd={item => setLocalItems(p => [...p, item])}
+          onClose={() => setShowNuevo(false)} />
+      )}
       {itemActivo && (
         <ModalItem item={itemActivo} onClose={() => setItemActivo(null)}
           onItemChange={(id, fields) => { onItemChange(id, fields); setItemActivo(null) }} />
