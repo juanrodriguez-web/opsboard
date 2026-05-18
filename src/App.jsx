@@ -71,7 +71,7 @@ const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); retu
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
 
 const getOverrides = ()          => lsGet(OV_KEY, {})
-const saveOverride = (k, st, sh) => { const ov = getOverrides(); ov[k] = { status:st, estadoSheet:sh, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
+const saveOverride = (k, fields) => { const ov = getOverrides(); ov[k] = { ...(ov[k]||{}), ...fields, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
 const getComments  = k           => (lsGet(COMMENTS_KEY, []) || []).filter(c => c.k === k)
 const saveComment  = (k, text)   => {
   const all = lsGet(COMMENTS_KEY, []) || []
@@ -88,11 +88,9 @@ function applyOverrides(items) {
     const k = norm(item.tema)
     const o = ov[k]
     if (!o) return item
-    if (item.status === o.status) {
-      const fresh = getOverrides(); delete fresh[k]; lsSet(OV_KEY, fresh)
-      return item
-    }
-    return { ...item, status:o.status, estadoSheet:o.estadoSheet }
+    // Apply all stored overrides (status, propietario, prioridad, fechaFin, risk…)
+    const { ts, ...fields } = o
+    return { ...item, ...fields }
   })
 }
 
@@ -752,21 +750,42 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
 }
 
 // ── Modal item ────────────────────────────────────────────────────────────────
-const ModalItem = ({ item, onClose, onStatusChange }) => {
-  const [newSt, setNewSt]   = useState(item.status)
-  const [nc, setNc]         = useState('')
-  const [saving, setSaving] = useState(false)
-  const cat          = CATS.find(c => c.id === item.category)
-  const localComments = getComments(norm(item.tema))
-  const rc           = RK.find(r => r.id === item.risk)?.color || '#94a3b8'
-  const dl           = item.fechaFin ? diasRestantes(fdStr(item.fechaFin)) : null
+const KNOWN_OWNERS = [
+  'Juan Rodriguez Peisel','Francisco Toledo','Nacho Cruz','Maria Garcia',
+]
+const PRIORIDADES = ['','P0','P1','P2','P3']
 
-  const guardarEstado = async () => {
-    if (newSt === item.status) { onClose(); return }
+const ModalItem = ({ item, onClose, onItemChange }) => {
+  const [newSt,    setNewSt]    = useState(item.status)
+  const [newProp,  setNewProp]  = useState(item.propietario || '')
+  const [newPrio,  setNewPrio]  = useState(item.prioridad  || '')
+  const [newFecha, setNewFecha] = useState(fdStr(item.fechaFin) || '')
+  const [nc,       setNc]       = useState('')
+  const [saving,   setSaving]   = useState(false)
+
+  const cat           = CATS.find(c => c.id === item.category)
+  const localComments = getComments(norm(item.tema))
+
+  const hasChanges =
+    newSt    !== item.status           ||
+    newProp  !== (item.propietario||'') ||
+    newPrio  !== (item.prioridad||'')   ||
+    newFecha !== (fdStr(item.fechaFin)||'')
+
+  const guardar = async () => {
+    if (!hasChanges) { onClose(); return }
     setSaving(true)
-    try { await apiUpdate(item.tema, ST_TO_SHEET[newSt]) } catch {}
-    saveOverride(norm(item.tema), newSt, ST_TO_SHEET[newSt])
-    onStatusChange(item.id, newSt)
+    const fields = {}
+    if (newSt !== item.status) {
+      fields.status      = newSt
+      fields.estadoSheet = ST_TO_SHEET[newSt]
+      try { await apiUpdate(item.tema, ST_TO_SHEET[newSt]) } catch {}
+    }
+    if (newProp  !== (item.propietario||'')) fields.propietario = newProp
+    if (newPrio  !== (item.prioridad||''))   { fields.prioridad = newPrio; fields.risk = mapRisk(newPrio) }
+    if (newFecha !== (fdStr(item.fechaFin)||'')) fields.fechaFin = newFecha || null
+    saveOverride(norm(item.tema), fields)
+    onItemChange(item.id, fields)
     setSaving(false); onClose()
   }
 
@@ -779,43 +798,69 @@ const ModalItem = ({ item, onClose, onStatusChange }) => {
     setNc(''); setSaving(false)
   }
 
+  const inputSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+
   return (
     <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
       onClick={e => e.target===e.currentTarget&&onClose()}>
       <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:680, maxHeight:'92vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+
+        {/* Header */}
         <div style={{ padding:'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:3, height:22, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
           <h3 style={{ flex:1, fontSize:15, fontWeight:700, color:C.text, lineHeight:1.3 }}>{item.tema}</h3>
+          {hasChanges && <span style={{ fontSize:10, color:'#fbbf24', background:'#fbbf2422', padding:'2px 8px', borderRadius:4, fontWeight:700 }}>● Sin guardar</span>}
           <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18 }}>✕</button>
         </div>
+
         <div style={{ flex:1, overflowY:'auto', padding:18 }}>
+
+          {/* Editable fields grid */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
             <div><Lbl>Área</Lbl><Tag id={item.category} type="cat" /></div>
+
             <div>
               <Lbl>Estado</Lbl>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <Sel value={newSt} onChange={setNewSt} opts={ST.map(s=>({v:s.id,l:s.label}))} style={{ flex:1 }} />
-                <Btn onClick={guardarEstado} disabled={saving} style={{ padding:'6px 12px', fontSize:12, flexShrink:0 }}>{saving?'…':'Guardar'}</Btn>
-              </div>
+              <Sel value={newSt} onChange={setNewSt} opts={ST.map(s=>({v:s.id,l:s.label}))} style={{ width:'100%' }} />
             </div>
-            <div><Lbl>Propietario</Lbl><span style={{ fontSize:13, color:C.text }}>{item.propietario||'—'}</span></div>
+
+            <div>
+              <Lbl>Propietario</Lbl>
+              <input list="owners-list" value={newProp} onChange={e=>setNewProp(e.target.value)}
+                placeholder="Nombre…" style={inputSt} />
+              <datalist id="owners-list">
+                {KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}
+              </datalist>
+            </div>
+
             <div>
               <Lbl>Prioridad</Lbl>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <Dot risk={item.risk} />
-                <span style={{ fontSize:13, color:rc, fontWeight:700 }}>{item.prioridad||'—'}</span>
-              </div>
+              <Sel value={newPrio} onChange={setNewPrio}
+                opts={PRIORIDADES.map(p=>({v:p,l:p||'Sin prioridad'}))}
+                style={{ width:'100%' }} />
             </div>
-            <div><Lbl>Fecha inicio</Lbl><span style={{ fontSize:13, color:C.text }}>{fmtFecha(fdStr(item.fechaInicio))}</span></div>
+
+            <div>
+              <Lbl>Fecha inicio</Lbl>
+              <span style={{ fontSize:13, color:C.text }}>{fmtFecha(fdStr(item.fechaInicio))}</span>
+            </div>
+
             <div>
               <Lbl>Fecha fin</Lbl>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <span style={{ fontSize:13, color:C.text }}>{fmtFecha(fdStr(item.fechaFin))}</span>
-                {dl !== null && dl < 0 && item.status !== 'done' && <span style={{ fontSize:10, background:'#f43f5e22', color:'#f43f5e', padding:'2px 6px', borderRadius:4, fontWeight:700 }}>{Math.abs(dl)}d vencida</span>}
-              </div>
+              <input type="date" value={newFecha} onChange={e=>setNewFecha(e.target.value)}
+                style={{ ...inputSt, colorScheme:'dark' }} />
             </div>
           </div>
-          {item.objetivo && <div style={{ marginBottom:16 }}><Lbl>Objetivo</Lbl><p style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>{item.objetivo}</p></div>}
+
+          {/* Objetivo */}
+          {item.objetivo && (
+            <div style={{ marginBottom:16 }}>
+              <Lbl>Objetivo</Lbl>
+              <p style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>{item.objetivo}</p>
+            </div>
+          )}
+
+          {/* Subtareas */}
           {item.subtareas.length > 0 && (
             <div style={{ marginBottom:16 }}>
               <Lbl>Subtareas ({item.subtareas.filter(s=>s.status==='done').length}/{item.subtareas.length})</Lbl>
@@ -831,6 +876,8 @@ const ModalItem = ({ item, onClose, onStatusChange }) => {
               })}
             </div>
           )}
+
+          {/* Comentarios */}
           <div style={{ marginBottom:16 }}>
             <Lbl>Actualizaciones</Lbl>
             {localComments.map(c => (
@@ -843,13 +890,15 @@ const ModalItem = ({ item, onClose, onStatusChange }) => {
             ))}
             <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:localComments.length>0?10:0 }}>
               <TA value={nc} onChange={setNc} placeholder="Escribe una actualización…" rows={2}
-                onKeyDown={e => { if(e.ctrlKey&&e.key==='Enter'){ guardarComentario(); e.preventDefault() } }} />
+                onKeyDown={e=>{ if(e.ctrlKey&&e.key==='Enter'){ guardarComentario(); e.preventDefault() } }} />
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <Btn onClick={guardarComentario} disabled={saving||!nc.trim()} style={{ padding:'6px 14px', fontSize:12 }}>💬 Guardar</Btn>
                 <span style={{ fontSize:11, color:C.muted }}>Ctrl+Enter</span>
               </div>
             </div>
           </div>
+
+          {/* Notas del sheet */}
           {item.notas && (
             <div>
               <Lbl>Notas de Seguimiento</Lbl>
@@ -859,9 +908,14 @@ const ModalItem = ({ item, onClose, onStatusChange }) => {
             </div>
           )}
         </div>
+
+        {/* Footer */}
         <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <span style={{ fontSize:11, color:C.muted }}>Sheet: <b style={{ color:C.text }}>{item.estadoSheet}</b> · {item.subtareas.length} subtareas</span>
-          <Btn v="sec" onClick={onClose}>Cerrar</Btn>
+          <div style={{ display:'flex', gap:8 }}>
+            <Btn v="sec" onClick={onClose}>Cancelar</Btn>
+            <Btn onClick={guardar} disabled={saving||!hasChanges}>{saving?'⏳ Guardando…':'💾 Guardar cambios'}</Btn>
+          </div>
         </div>
       </div>
     </div>
@@ -900,15 +954,15 @@ export default function OpsBoard() {
 
   useEffect(() => { loadData() }, [])
 
-  const onStatusChange = (id, newSt) =>
-    setItems(prev => prev.map(i => i.id===id ? {...i, status:newSt, estadoSheet:ST_TO_SHEET[newSt]} : i))
+  const onItemChange = (id, fields) =>
+    setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
 
   const onNextSt = async (id, newSt) => {
     const item = allItems.find(i => i.id===id)
     if (!item) return
-    saveOverride(norm(item.tema), newSt, ST_TO_SHEET[newSt])
+    saveOverride(norm(item.tema), { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
     try { await apiUpdate(item.tema, ST_TO_SHEET[newSt]) } catch {}
-    onStatusChange(id, newSt)
+    onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
   }
 
   const VISTAS = ['Tablero','Dashboard','📅 Campañas CVM','✨ IA Intake','📋 Reporte Semanal']
@@ -975,7 +1029,7 @@ export default function OpsBoard() {
 
       {itemActivo && (
         <ModalItem item={itemActivo} onClose={() => setItemActivo(null)}
-          onStatusChange={(id, st) => { onStatusChange(id, st); setItemActivo(null) }} />
+          onItemChange={(id, fields) => { onItemChange(id, fields); setItemActivo(null) }} />
       )}
     </div>
   )
