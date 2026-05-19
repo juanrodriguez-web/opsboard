@@ -14,7 +14,7 @@ function getAuth() {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { tema, estado, notas } = req.body || {}
+  const { tema, estado, notas, propietario, prioridad, fechaFin, proyecto } = req.body || {}
   if (!tema) return res.status(400).json({ error: 'tema is required' })
 
   try {
@@ -22,8 +22,12 @@ module.exports = async function handler(req, res) {
     const drive = google.drive({ version: 'v3', auth })
 
     const row = { Tema: tema }
-    if (estado) row['Estado'] = estado
-    if (notas)  row['Notas']  = notas
+    if (estado       != null) row['Estado']                 = estado
+    if (notas        != null) row['Notas']                  = notas
+    if (propietario  != null) row['Propietario']            = propietario
+    if (prioridad    != null) row['Prioridad']              = prioridad
+    if (fechaFin     != null) row['Fecha de finalización']  = fechaFin
+    if (proyecto     != null) row['Proyecto']               = proyecto
 
     const payload = {
       action:    'upsert',

@@ -3,7 +3,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { parseSheetValues, buildItems, parseCampanas, parseProyectos, norm } from './parser.js'
+import { parseSheetValues, buildItems, parseCampanas, parseProyectos, norm, mapRisk } from './parser.js'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
@@ -106,11 +106,11 @@ async function fetchAll() {
   return { items, campanas, proyectos }
 }
 
-async function apiUpdate(tema, estado, notas) {
+async function apiUpdate(tema, fields = {}) {
   await fetch('/api/update', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ tema, ...(estado && { estado }), ...(notas && { notas }) }),
+    body:    JSON.stringify({ tema, ...fields }),
   })
 }
 
@@ -166,8 +166,9 @@ const AlertFecha = ({ endDate, status }) => {
 const Tarjeta = ({ item, onClick, onNextSt }) => {
   const cat    = CATS.find(c => c.id === item.category)
   const nextId = ST[(ST.findIndex(s => s.id === item.status) + 1) % ST.length].id
-  const stOk   = (item.subtareas || []).filter(s => s.status === 'done').length
-  const stTot  = (item.subtareas || []).length
+  const allSubs = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
+  const stOk  = allSubs.filter(s => s.status === 'done').length
+  const stTot = allSubs.length
   const dl     = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
   const oc     = ownerColor(item.propietario)
   return (
@@ -601,8 +602,9 @@ const CampanasCVM = ({ campanas }) => {
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
 const Proyectos = ({ proyectos, allItems }) => {
-  const [filtSt,   setFiltSt]   = useState('all')
-  const [expanded, setExpanded] = useState(null)
+  const [filtSt,          setFiltSt]          = useState('all')
+  const [expanded,        setExpanded]        = useState(null)
+  const [showSinProyecto, setShowSinProyecto] = useState(false)
 
   const temasOf = nombre => allItems.filter(i => norm(i.proyecto||'') === norm(nombre))
 
@@ -657,6 +659,40 @@ const Proyectos = ({ proyectos, allItems }) => {
           )
         })}
       </div>
+
+      {/* Sin proyecto */}
+      {(() => {
+        const sinProy = allItems.filter(i => !i.proyecto || !i.proyecto.trim())
+        if (sinProy.length === 0) return null
+        return (
+          <div style={{ marginBottom:18 }}>
+            <button onClick={() => setShowSinProyecto(p => !p)}
+              style={{ display:'flex', alignItems:'center', gap:8, width:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:showSinProyecto?'10px 10px 0 0':10, padding:'12px 16px', cursor:'pointer', color:C.text, fontSize:13, fontWeight:600, outline:'none' }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:C.muted, display:'inline-block', flexShrink:0 }} />
+              <span style={{ flex:1, textAlign:'left' }}>Sin proyecto asignado</span>
+              <span style={{ fontSize:11, color:C.muted, background:C.surface, padding:'2px 8px', borderRadius:10 }}>{sinProy.length} tema{sinProy.length!==1?'s':''}</span>
+              <span style={{ color:C.muted, fontSize:12 }}>{showSinProyecto?'▲':'▼'}</span>
+            </button>
+            {showSinProyecto && (
+              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderTop:'none', borderRadius:'0 0 10px 10px', overflow:'hidden' }}>
+                {sinProy.map(t => {
+                  const st  = ST.find(s=>s.id===t.status)
+                  const cat = CATS.find(c=>c.id===t.category)
+                  return (
+                    <div key={t.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12 }}>
+                      <div style={{ width:3, height:16, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
+                      <span style={{ flex:1, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
+                      <Tag id={t.category} type="cat" />
+                      <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
+                      <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{(t.propietario||'').split(' ')[0]}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:14 }}>
@@ -1021,8 +1057,10 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
   const [newPrio,  setNewPrio]  = useState(item.prioridad  || '')
   const [newFecha, setNewFecha] = useState(fdStr(item.fechaFin) || '')
   const [newProy,  setNewProy]  = useState(item.proyecto   || '')
-  const [nc,       setNc]       = useState('')
-  const [saving,   setSaving]   = useState(false)
+  const [nc,          setNc]          = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [newSubTitle, setNewSubTitle] = useState('')
+  const [newSubSt,    setNewSubSt]    = useState('pending')
 
   const cat           = CATS.find(c => c.id === item.category)
   const localComments = getComments(norm(item.tema))
@@ -1037,16 +1075,19 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
   const guardar = async () => {
     if (!hasChanges) { onClose(); return }
     setSaving(true)
-    const fields = {}
+    const fields    = {}
+    const apiFields = {}
     if (newSt !== item.status) {
-      fields.status      = newSt
-      fields.estadoSheet = ST_TO_SHEET[newSt]
-      try { await apiUpdate(item.tema, ST_TO_SHEET[newSt]) } catch {}
+      fields.status = newSt; fields.estadoSheet = ST_TO_SHEET[newSt]
+      apiFields.estado = ST_TO_SHEET[newSt]
     }
-    if (newProp  !== (item.propietario||'')) fields.propietario = newProp
-    if (newPrio  !== (item.prioridad||''))   { fields.prioridad = newPrio; fields.risk = mapRisk(newPrio) }
-    if (newFecha !== (fdStr(item.fechaFin)||'')) fields.fechaFin = newFecha || null
-    if (newProy  !== (item.proyecto||''))       fields.proyecto = newProy
+    if (newProp !== (item.propietario||'')) { fields.propietario = newProp; apiFields.propietario = newProp }
+    if (newPrio !== (item.prioridad||''))   { fields.prioridad = newPrio; fields.risk = mapRisk(newPrio); apiFields.prioridad = newPrio }
+    if (newFecha !== (fdStr(item.fechaFin)||'')) { fields.fechaFin = newFecha || null; if (newFecha) apiFields.fechaFin = newFecha }
+    if (newProy !== (item.proyecto||''))    { fields.proyecto = newProy; apiFields.proyecto = newProy }
+    if (Object.keys(apiFields).length > 0) {
+      try { await apiUpdate(item.tema, apiFields) } catch {}
+    }
     saveOverride(norm(item.tema), fields)
     onItemChange(item.id, fields)
     setSaving(false); onClose()
@@ -1057,8 +1098,17 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
     if (!text) return
     setSaving(true)
     const c = saveComment(norm(item.tema), text)
-    try { await apiUpdate(item.tema, undefined, `[${c.ts}] ${text}`) } catch {}
+    try { await apiUpdate(item.tema, { notas: `[${c.ts}] ${text}` }) } catch {}
     setNc(''); setSaving(false)
+  }
+
+  const addSubtarea = () => {
+    if (!newSubTitle.trim()) return
+    const sub     = { id: uid(), title: newSubTitle.trim(), prop: '', status: newSubSt, risk: 'green', fechaFin: null, notas: '' }
+    const updated = [...(item.subtareasLocal || []), sub]
+    saveOverride(norm(item.tema), { subtareasLocal: updated })
+    onItemChange(item.id, { subtareasLocal: updated }, true)
+    setNewSubTitle('')
   }
 
   const inputSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
@@ -1134,21 +1184,38 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
           )}
 
           {/* Subtareas */}
-          {item.subtareas.length > 0 && (
-            <div style={{ marginBottom:16 }}>
-              <Lbl>Subtareas ({item.subtareas.filter(s=>s.status==='done').length}/{item.subtareas.length})</Lbl>
-              {item.subtareas.map((st,i) => {
-                const sc = ST.find(s=>s.id===st.status)||ST[0]
-                return (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, borderRadius:6, padding:'7px 10px', marginBottom:5, border:`1px solid ${C.border}` }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:RK.find(r=>r.id===st.risk)?.color||'#64748b', flexShrink:0 }} />
-                    <span style={{ flex:1, fontSize:12, color:st.status==='done'?C.muted:C.text, textDecoration:st.status==='done'?'line-through':'none' }}>{st.title}</span>
-                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, background:sc.color+'22', color:sc.color }}>{sc.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          {(() => {
+            const allSubItems = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
+            const doneN       = allSubItems.filter(s=>s.status==='done').length
+            const fromSheet   = (item.subtareas||[]).length
+            return (
+              <div style={{ marginBottom:16 }}>
+                <Lbl>Subtareas ({doneN}/{allSubItems.length})</Lbl>
+                {allSubItems.map((st,i) => {
+                  const sc      = ST.find(s=>s.id===st.status)||ST[0]
+                  const isLocal = i >= fromSheet
+                  return (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, borderRadius:6, padding:'7px 10px', marginBottom:5, border:`1px solid ${isLocal?C.accent+'44':C.border}` }}>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:RK.find(r=>r.id===st.risk)?.color||'#64748b', flexShrink:0 }} />
+                      <span style={{ flex:1, fontSize:12, color:st.status==='done'?C.muted:C.text, textDecoration:st.status==='done'?'line-through':'none' }}>{st.title}</span>
+                      {isLocal && <span style={{ fontSize:9, color:C.accent, background:C.accent+'22', padding:'1px 5px', borderRadius:3, flexShrink:0 }}>local</span>}
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, background:sc.color+'22', color:sc.color, flexShrink:0 }}>{sc.label}</span>
+                    </div>
+                  )
+                })}
+                {/* Nueva subtarea */}
+                <div style={{ display:'flex', gap:6, marginTop:8, alignItems:'center' }}>
+                  <input value={newSubTitle} onChange={e=>setNewSubTitle(e.target.value)}
+                    placeholder="Nueva subtarea…"
+                    onKeyDown={e=>e.key==='Enter'&&addSubtarea()}
+                    style={{ flex:1, background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px 9px', fontSize:12, outline:'none' }} />
+                  <Sel value={newSubSt} onChange={setNewSubSt} opts={ST.map(s=>({v:s.id,l:s.label}))}
+                    style={{ fontSize:11, padding:'5px 8px' }} />
+                  <Btn onClick={addSubtarea} disabled={!newSubTitle.trim()} style={{ padding:'5px 10px', fontSize:12 }}>+ Añadir</Btn>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Comentarios */}
           <div style={{ marginBottom:16 }}>
@@ -1184,7 +1251,7 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
 
         {/* Footer */}
         <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span style={{ fontSize:11, color:C.muted }}>Sheet: <b style={{ color:C.text }}>{item.estadoSheet}</b> · {item.subtareas.length} subtareas</span>
+          <span style={{ fontSize:11, color:C.muted }}>Sheet: <b style={{ color:C.text }}>{item.estadoSheet}</b> · {[...(item.subtareas||[]), ...(item.subtareasLocal||[])].length} subtareas</span>
           <div style={{ display:'flex', gap:8 }}>
             <Btn v="sec" onClick={onClose}>Cancelar</Btn>
             <Btn onClick={guardar} disabled={saving||!hasChanges}>{saving?'⏳ Guardando…':'💾 Guardar cambios'}</Btn>
@@ -1237,7 +1304,7 @@ export default function OpsBoard() {
     const item = allItems.find(i => i.id===id)
     if (!item) return
     saveOverride(norm(item.tema), { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
-    try { await apiUpdate(item.tema, ST_TO_SHEET[newSt]) } catch {}
+    try { await apiUpdate(item.tema, { estado: ST_TO_SHEET[newSt] }) } catch {}
     onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
   }
 
@@ -1313,7 +1380,11 @@ export default function OpsBoard() {
       )}
       {itemActivo && (
         <ModalItem item={itemActivo} onClose={() => setItemActivo(null)}
-          onItemChange={(id, fields) => { onItemChange(id, fields); setItemActivo(null) }}
+          onItemChange={(id, fields, keepOpen = false) => {
+            onItemChange(id, fields)
+            if (keepOpen) setItemActivo(prev => prev && prev.id===id ? { ...prev, ...fields } : prev)
+            else setItemActivo(null)
+          }}
           proyectoNames={proyectos.map(p => p.nombre)} />
       )}
     </div>
