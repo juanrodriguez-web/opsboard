@@ -7,29 +7,29 @@ import { parseSheetValues, buildItems, parseCampanas, parseProyectos, norm, mapR
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
-  { id:'projects', label:'Iniciativas',   color:'#60a5fa', bg:'#1a2740' },
-  { id:'product',  label:'Producto',     color:'#a78bfa', bg:'#211a40' },
-  { id:'tools',    label:'Herramientas', color:'#fbbf24', bg:'#3d2e0a' },
-  { id:'cvm',      label:'CVM',          color:'#06b6d4', bg:'#0c2a33' },
+  { id:'projects', label:'Iniciativas',   color:'#3b82f6', bg:'#dbeafe' },
+  { id:'product',  label:'Producto',     color:'#8b5cf6', bg:'#ede9fe' },
+  { id:'tools',    label:'Herramientas', color:'#d97706', bg:'#fef3c7' },
+  { id:'cvm',      label:'CVM',          color:'#0891b2', bg:'#cffafe' },
 ]
 const ST = [
   { id:'pending',    label:'Pendiente',  color:'#64748b' },
-  { id:'inprogress', label:'En Curso',   color:'#818cf8' },
-  { id:'blocked',    label:'Bloqueado',  color:'#f43f5e' },
-  { id:'done',       label:'Completado', color:'#34d399' },
+  { id:'inprogress', label:'En Curso',   color:'#6366f1' },
+  { id:'blocked',    label:'Bloqueado',  color:'#e11d48' },
+  { id:'done',       label:'Completado', color:'#10b981' },
 ]
 const RK = [
-  { id:'green',  label:'Normal',   color:'#34d399' },
-  { id:'yellow', label:'Atención', color:'#fbbf24' },
-  { id:'red',    label:'Riesgo',   color:'#f43f5e' },
+  { id:'green',  label:'Normal',   color:'#10b981' },
+  { id:'yellow', label:'Atención', color:'#d97706' },
+  { id:'red',    label:'Riesgo',   color:'#e11d48' },
 ]
 const ST_TO_SHEET = {
   pending:'No iniciado', inprogress:'Según lo planificado',
   blocked:'En peligro',  done:'Hecho',
 }
 const C = {
-  bg:'#0b0d17', surface:'#13162a', card:'#1a1e35',
-  border:'#242843', text:'#e2e8f0', muted:'#5a6485', accent:'#818cf8',
+  bg:'#f0f2f8', surface:'#fafbfe', card:'#ffffff',
+  border:'#dde2ee', text:'#1a1d2e', muted:'#6b7899', accent:'#6366f1',
 }
 const OV_KEY           = 'obs-status-overrides'
 const COMMENTS_KEY     = 'obs-comments'
@@ -37,23 +37,23 @@ const PROJ_COMMENTS_KEY = 'obs-proj-comments'
 
 // Owner colors
 const OWN_COLORS = {
-  'juan rodriguez peisel': '#60a5fa',
-  'francisco toledo':      '#a78bfa',
-  'nacho cruz':            '#fbbf24',
-  'maria garcia':          '#06b6d4',
+  'juan rodriguez peisel': '#2563eb',
+  'francisco toledo':      '#7c3aed',
+  'nacho cruz':            '#d97706',
+  'maria garcia':          '#0891b2',
 }
 const ownerColor = name => OWN_COLORS[norm(name || '')] || '#64748b'
 
 // CVM campaign helpers
 const TIPO_COLORS = {
-  'oferta one shot':'#fbbf24', 'oferta':'#fbbf24',
-  'reminder':'#818cf8', 'bau':'#64748b',
-  'reactivacion':'#f43f5e', 'reactivación':'#f43f5e',
+  'oferta one shot':'#d97706', 'oferta':'#d97706',
+  'reminder':'#6366f1', 'bau':'#475569',
+  'reactivacion':'#e11d48', 'reactivación':'#e11d48',
 }
 const ESTADO_CAMP_COLORS = {
-  'planificado':'#818cf8', 'enviado':'#34d399', 'cancelado':'#f43f5e',
+  'planificado':'#6366f1', 'enviado':'#10b981', 'cancelado':'#e11d48',
 }
-const tipoColor   = t => TIPO_COLORS[norm(t)]   || '#06b6d4'
+const tipoColor   = t => TIPO_COLORS[norm(t)]   || '#0891b2'
 const estadoCColor = e => ESTADO_CAMP_COLORS[norm(e)] || '#64748b'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ const Toast = ({ msg, type = 'success', onHide }) => {
       background:C.card, border:`1px solid ${col}55`, borderLeft:`3px solid ${col}`,
       borderRadius:8, padding:'11px 18px', fontSize:13, color:col, fontWeight:600,
       display:'flex', alignItems:'center', gap:8,
-      boxShadow:'0 8px 32px rgba(0,0,0,.5)',
+      boxShadow:'0 4px 20px rgba(0,0,0,.12)',
       animation:'toastSlideIn 220ms cubic-bezier(0.23,1,0.32,1) both',
       pointerEvents:'none', userSelect:'none',
     }}>
@@ -216,7 +216,7 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
       style={{ background:C.card, borderRadius:8, padding:12, marginBottom:8,
         border:`1px solid ${dl!==null&&dl<0?'#f43f5e55':C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, cursor:'pointer',
         transition:'box-shadow 150ms ease-out' }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.3)'}
+      onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'}
       onMouseLeave={e => e.currentTarget.style.boxShadow='none'}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:6 }}>
         <Dot risk={item.risk} />
@@ -723,7 +723,7 @@ const GanttChart = ({ temas }) => {
               <div style={{ width:168, flexShrink:0, paddingRight:10 }}>
                 <span style={{ fontSize:11, color:t.status==='done'?C.muted:C.text, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration:t.status==='done'?'line-through':'none' }}>{t.tema}</span>
               </div>
-              <div style={{ flex:1, position:'relative', height:22, borderRadius:3, background:i%2===0?'rgba(255,255,255,.025)':'transparent' }}>
+              <div style={{ flex:1, position:'relative', height:22, borderRadius:3, background:i%2===0?'rgba(0,0,0,.025)':'transparent' }}>
                 {ticks.map((tk, ti) => (
                   <div key={ti} style={{ position:'absolute', left:`${(tk.getTime()-minTs)/span*100}%`, top:0, bottom:0, width:1, background:C.border+'66' }} />
                 ))}
@@ -835,7 +835,7 @@ const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema, onOpenItem }) =
         width:'100%', maxWidth:800, maxHeight:'91vh', overflow:'hidden',
         display:'flex', flexDirection:'column',
         animation:'modalProjIn 220ms cubic-bezier(0.23,1,0.32,1) both',
-        boxShadow:'0 24px 60px rgba(0,0,0,.5)',
+        boxShadow:'0 8px 40px rgba(0,0,0,.15)',
       }}>
         {/* Header */}
         <div style={{ padding:'16px 20px 14px', borderBottom:`1px solid ${C.border}`, background:C.card }}>
@@ -1018,7 +1018,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
         @keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
         @keyframes rowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .proj-card{transition:transform 180ms cubic-bezier(0.23,1,0.32,1),box-shadow 180ms ease-out,border-color 180ms ease-out}
-        .proj-card:hover{transform:translateY(-3px)!important;box-shadow:0 12px 32px rgba(0,0,0,.4)!important}
+        .proj-card:hover{transform:translateY(-3px)!important;box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
         .proj-card:active{transform:scale(0.98) translateY(0)!important;transition-duration:80ms!important}
       `}</style>
 
@@ -1424,7 +1424,7 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
             <div>
               <Lbl>Fecha fin</Lbl>
               <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
-                style={{ ...inputSt, colorScheme:'dark' }} />
+                style={{ ...inputSt, colorScheme:'light' }} />
             </div>
           </div>
           <div>
@@ -1567,7 +1567,7 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [], onToast })
             <div>
               <Lbl>Fecha fin</Lbl>
               <input type="date" value={newFecha} onChange={e=>setNewFecha(e.target.value)}
-                style={{ ...inputSt, colorScheme:'dark' }} />
+                style={{ ...inputSt, colorScheme:'light' }} />
             </div>
 
             <div style={{ gridColumn:'1/-1' }}>
