@@ -68,6 +68,12 @@ const diasRestantes = e => e ? Math.ceil((new Date(e + 'T23:59').getTime() - Dat
 const iniciales     = n => (n || '?').split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase()
 const fdStr         = d => d instanceof Date ? d.toISOString().slice(0, 10) : (d || '')
 
+const useW = () => {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1400)
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h) }, [])
+  return w
+}
+
 const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def } catch { return def } }
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
 
@@ -100,7 +106,7 @@ function applyOverrides(items) {
     if (!o) return item
     // Apply all stored overrides (status, propietario, prioridad, fechaFin, risk…)
     const { ts, ...fields } = o
-    return { ...item, ...fields }
+    return { ...item, ...fields, _hasLocal: true }
   })
 }
 
@@ -167,43 +173,74 @@ const Btn  = ({ onClick, children, v='primary', style, disabled }) => {
     {children}
   </button>
 }
-const Lbl  = ({ children }) => <div style={{ fontSize:10, color:C.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:5 }}>{children}</div>
+const Lbl  = ({ children }) => <div style={{ fontSize:11, color:C.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:5 }}>{children}</div>
 const AlertFecha = ({ endDate, status }) => {
   if (!endDate || status === 'done') return null
   const dl    = diasRestantes(fdStr(endDate))
   const color = dl < 0 ? '#f43f5e' : dl <= 3 ? '#fbbf24' : C.muted
   const txt   = dl < 0 ? `Vencida ${Math.abs(dl)}d` : dl === 0 ? 'Hoy' : dl <= 3 ? `${dl}d` : fmtFecha(fdStr(endDate))
-  return <span style={{ fontSize:10, color, fontWeight:dl<=3?700:400, background:dl<=3?color+'22':'transparent', padding:dl<=3?'2px 5px':'0', borderRadius:4 }}>{txt}</span>
+  return <span style={{ fontSize:11, color, fontWeight:dl<=3?700:400, background:dl<=3?color+'22':'transparent', padding:dl<=3?'2px 5px':'0', borderRadius:4 }}>{txt}</span>
+}
+const Toast = ({ msg, type = 'success', onHide }) => {
+  useEffect(() => { const t = setTimeout(onHide, 2800); return () => clearTimeout(t) }, [])
+  const col = type === 'error' ? '#f43f5e' : type === 'warn' ? '#fbbf24' : '#34d399'
+  return (
+    <div style={{
+      position:'fixed', bottom:24, right:24, zIndex:3000,
+      background:C.card, border:`1px solid ${col}55`, borderLeft:`3px solid ${col}`,
+      borderRadius:8, padding:'11px 18px', fontSize:13, color:col, fontWeight:600,
+      display:'flex', alignItems:'center', gap:8,
+      boxShadow:'0 8px 32px rgba(0,0,0,.5)',
+      animation:'toastSlideIn 220ms cubic-bezier(0.23,1,0.32,1) both',
+      pointerEvents:'none', userSelect:'none',
+    }}>
+      <style>{`@keyframes toastSlideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}`}</style>
+      {type === 'error' ? '⚠' : type === 'warn' ? '⚠' : '✓'} {msg}
+    </div>
+  )
 }
 
 // ── Tarjeta ──────────────────────────────────────────────────────────────────
 const Tarjeta = ({ item, onClick, onNextSt }) => {
-  const cat    = CATS.find(c => c.id === item.category)
-  const nextId = ST[(ST.findIndex(s => s.id === item.status) + 1) % ST.length].id
-  const allSubs = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
-  const stOk  = allSubs.filter(s => s.status === 'done').length
-  const stTot = allSubs.length
-  const dl     = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
-  const oc     = ownerColor(item.propietario)
+  const cat      = CATS.find(c => c.id === item.category)
+  const nextIdx  = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
+  const nextId   = ST[nextIdx].id
+  const nextSt   = ST[nextIdx]
+  const allSubs  = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
+  const stOk     = allSubs.filter(s => s.status === 'done').length
+  const stTot    = allSubs.length
+  const dl       = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
+  const oc       = ownerColor(item.propietario)
   return (
     <div onClick={() => onClick(item)}
       style={{ background:C.card, borderRadius:8, padding:12, marginBottom:8,
-        border:`1px solid ${dl!==null&&dl<0?'#f43f5e55':C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, cursor:'pointer' }}>
+        border:`1px solid ${dl!==null&&dl<0?'#f43f5e55':C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, cursor:'pointer',
+        transition:'box-shadow 150ms ease-out' }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.3)'}
+      onMouseLeave={e => e.currentTarget.style.boxShadow='none'}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:6 }}>
         <Dot risk={item.risk} />
         <span style={{ flex:1, fontSize:13, fontWeight:600, color:C.text, lineHeight:1.35 }}>{item.tema}</span>
+        {item._hasLocal && <span title="Cambios locales pendientes de sincronización" style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, flexShrink:0, cursor:'help', fontWeight:700 }}>~local</span>}
       </div>
       {item.objetivo && <p style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{item.objetivo}</p>}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, flexWrap:'wrap' }}>
-          <div style={{ width:20, height:20, borderRadius:'50%', background:oc+'28', border:`1.5px solid ${oc}66`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:oc, fontFamily:'monospace', flexShrink:0 }}>{iniciales(item.propietario)}</div>
+          <div style={{ width:20, height:20, borderRadius:'50%', background:oc+'28', border:`1.5px solid ${oc}66`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:oc, fontFamily:'monospace', flexShrink:0 }} title={item.propietario||'Sin propietario'}>{iniciales(item.propietario)}</div>
           <AlertFecha endDate={item.fechaFin} status={item.status} />
-          {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:RK.find(r=>r.id===item.risk)?.color+'22', color:RK.find(r=>r.id===item.risk)?.color }}>{item.prioridad}</span>}
+          {item.prioridad && <span style={{ fontSize:10, fontWeight:700, padding:'1px 5px', borderRadius:3, background:RK.find(r=>r.id===item.risk)?.color+'22', color:RK.find(r=>r.id===item.risk)?.color }}>{item.prioridad}</span>}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-          {stTot > 0 && <span style={{ fontSize:10, color:C.muted }}>{stOk}/{stTot}</span>}
-          <button onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
-            style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, padding:'2px 6px', fontSize:10, cursor:'pointer', color:C.muted }}>→</button>
+          {stTot > 0 && <span style={{ fontSize:11, color:C.muted }}>{stOk}/{stTot}</span>}
+          <button
+            title={`Cambiar a: ${nextSt.label}`}
+            aria-label={`Cambiar estado a ${nextSt.label}`}
+            onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
+            style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 8px', fontSize:11, cursor:'pointer', color:C.muted, transition:'all 130ms ease-out', fontWeight:600, lineHeight:1 }}
+            onMouseEnter={e => { e.currentTarget.style.background=nextSt.color+'22'; e.currentTarget.style.color=nextSt.color; e.currentTarget.style.borderColor=nextSt.color+'55' }}
+            onMouseLeave={e => { e.currentTarget.style.background=C.surface; e.currentTarget.style.color=C.muted; e.currentTarget.style.borderColor=C.border }}>
+            →
+          </button>
         </div>
       </div>
     </div>
@@ -212,7 +249,13 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
 
 // ── Tablero ──────────────────────────────────────────────────────────────────
 const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo }) => {
-  const f = items.filter(i => catF==='all'||i.category===catF).filter(i => asF==='all'||norm(i.propietario)===norm(asF))
+  const [search, setSearch] = useState('')
+  const w = useW()
+  const kanbanCols = w >= 1024 ? 'repeat(4,1fr)' : w >= 640 ? 'repeat(2,1fr)' : 'repeat(1,1fr)'
+  const f = items
+    .filter(i => catF==='all'||i.category===catF)
+    .filter(i => asF==='all'||norm(i.propietario)===norm(asF))
+    .filter(i => !search.trim() || norm(i.tema + ' ' + (i.objetivo||'')).includes(norm(search)))
   return (
     <div>
       <div style={{ display:'flex', gap:8, paddingTop:16, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
@@ -234,6 +277,10 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
           <option value="all">Todos</option>
           {owners.map(o => <option key={o} value={o}>{o.split(' ')[0]}</option>)}
         </select>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="🔍 Buscar tema…"
+          style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:20, padding:'5px 14px', fontSize:12, outline:'none', minWidth:160 }} />
         <div style={{ display:'flex', gap:4, marginLeft:'auto', alignItems:'center' }}>
           <button onClick={onNuevo}
             style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:700, border:`1px solid ${C.accent}55`,
@@ -248,8 +295,14 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
           ))}
         </div>
       </div>
+      {f.length === 0 && search.trim() && (
+        <div style={{ textAlign:'center', color:C.muted, padding:'40px 0', fontSize:13 }}>
+          Sin resultados para "<b style={{ color:C.text }}>{search}</b>"
+          <button onClick={() => setSearch('')} style={{ marginLeft:10, background:'none', border:'none', color:C.accent, cursor:'pointer', fontSize:12 }}>Limpiar</button>
+        </div>
+      )}
       {modo === 'kanban' ? (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:kanbanCols, gap:14 }}>
           {ST.map(st => {
             const col = f.filter(i => i.status === st.id)
             return (
@@ -311,6 +364,8 @@ const FRAN_NORM  = norm('francisco toledo')
 const Dashboard = ({ allItems }) => {
   const [dashOwn, setDashOwn] = useState(() => localStorage.getItem('obs-dash-own') || 'team')
   const [dashCat, setDashCat] = useState(() => localStorage.getItem('obs-dash-cat') || 'all')
+  const w = useW()
+  const kpiCols = w >= 1100 ? 'repeat(6,1fr)' : w >= 600 ? 'repeat(3,1fr)' : 'repeat(2,1fr)'
 
   const setOwn = v => { setDashOwn(v); localStorage.setItem('obs-dash-own', v) }
   const setCat = v => { setDashCat(v); localStorage.setItem('obs-dash-cat', v) }
@@ -387,7 +442,7 @@ const Dashboard = ({ allItems }) => {
       </div>
 
       {/* KPIs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, marginBottom:18 }}>
+      <div style={{ display:'grid', gridTemplateColumns:kpiCols, gap:10, marginBottom:18 }}>
         {kpis.map((k,i) => (
           <div key={i} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px' }}>
             <div style={{ fontSize:28, fontWeight:700, color:k.c, lineHeight:1 }}>{k.v}</div>
@@ -713,7 +768,7 @@ const GanttChart = ({ temas }) => {
 }
 
 // ── ModalProyecto ─────────────────────────────────────────────────────────────
-const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema }) => {
+const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema, onOpenItem }) => {
   const [tab,          setTab]          = useState('temas')
   const [nc,           setNc]           = useState('')
   const [comments,     setComments]     = useState(() => getProjectComments(norm(proyecto.nombre)))
@@ -722,6 +777,12 @@ const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema }) => {
   const [newTemaObj,   setNewTemaObj]   = useState('')
   const [newTemaCat,   setNewTemaCat]   = useState('projects')
   const [newTemaProp,  setNewTemaProp]  = useState(proyecto.propietario || '')
+
+  useEffect(() => {
+    const h = e => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   const temas   = allItems.filter(i => norm(i.proyecto || '') === norm(proyecto.nombre))
   const done    = temas.filter(t => t.status === 'done').length
@@ -848,13 +909,18 @@ const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema }) => {
                 const st  = ST.find(s => s.id === t.status)
                 const cat = CATS.find(c => c.id === t.category)
                 return (
-                  <div key={t.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px', background:C.card, borderRadius:7, marginBottom:6, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, animation:`rowIn 240ms cubic-bezier(0.23,1,0.32,1) ${i*35}ms both` }}>
+                  <div key={t.id}
+                    onClick={() => onOpenItem?.(t)}
+                    style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px', background:C.card, borderRadius:7, marginBottom:6, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, animation:`rowIn 240ms cubic-bezier(0.23,1,0.32,1) ${i*35}ms both`, cursor:onOpenItem?'pointer':'default', transition:'background 120ms ease-out' }}
+                    onMouseEnter={e => onOpenItem && (e.currentTarget.style.background=C.surface)}
+                    onMouseLeave={e => onOpenItem && (e.currentTarget.style.background=C.card)}>
                     <Dot risk={t.risk} />
                     <span style={{ flex:1, fontSize:13, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
                     <Tag id={t.category} type="cat" />
                     <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
                     <span style={{ fontSize:10, color:C.muted, flexShrink:0, minWidth:36 }}>{(t.propietario||'').split(' ')[0]||'—'}</span>
                     {t.fechaFin && <AlertFecha endDate={t.fechaFin} status={t.status} />}
+                    {onOpenItem && <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>↗</span>}
                   </div>
                 )
               })}
@@ -923,7 +989,7 @@ const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema }) => {
 }
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
-const Proyectos = ({ proyectos, allItems, onAddTema }) => {
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
   const [filtSt,          setFiltSt]          = useState('all')
   const [showSinProyecto, setShowSinProyecto] = useState(false)
   const [modalProy,       setModalProy]       = useState(null)
@@ -1099,6 +1165,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema }) => {
           allItems={allItems}
           onClose={() => setModalProy(null)}
           onAddTema={tema => { onAddTema(tema) }}
+          onOpenItem={item => { setModalProy(null); onOpenItem?.(item) }}
         />
       )}
     </div>
@@ -1384,7 +1451,7 @@ const KNOWN_OWNERS = [
 ]
 const PRIORIDADES = ['','P0','P1','P2','P3']
 
-const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
+const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [], onToast }) => {
   const [newSt,    setNewSt]    = useState(item.status)
   const [newProp,  setNewProp]  = useState(item.propietario || '')
   const [newPrio,  setNewPrio]  = useState(item.prioridad  || '')
@@ -1394,6 +1461,12 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
   const [saving,      setSaving]      = useState(false)
   const [newSubTitle, setNewSubTitle] = useState('')
   const [newSubSt,    setNewSubSt]    = useState('pending')
+
+  useEffect(() => {
+    const h = e => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   const cat           = CATS.find(c => c.id === item.category)
   const localComments = getComments(norm(item.tema))
@@ -1423,7 +1496,7 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
     }
     saveOverride(norm(item.tema), fields)
     onItemChange(item.id, fields)
-    setSaving(false); onClose()
+    setSaving(false); onToast?.('Cambios guardados'); onClose()
   }
 
   const guardarComentario = async () => {
@@ -1432,7 +1505,7 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [] }) => {
     setSaving(true)
     const c = saveComment(norm(item.tema), text)
     try { await apiUpdate(item.tema, { notas: `[${c.ts}] ${text}` }) } catch {}
-    setNc(''); setSaving(false)
+    setNc(''); setSaving(false); onToast?.('Actualización guardada')
   }
 
   const addSubtarea = () => {
@@ -1610,6 +1683,7 @@ export default function OpsBoard() {
   const [catF,        setCatF]       = useState('all')
   const [asF,         setAsF]        = useState('all')
   const [modo,        setModo]       = useState('kanban')
+  const [toast,       setToast]      = useState(null)
 
   const allItems = [...items, ...localItems]
   const owners   = [...new Set(allItems.map(i => i.propietario).filter(Boolean))]
@@ -1646,6 +1720,7 @@ export default function OpsBoard() {
   return (
     <div style={{ background:C.bg, minHeight:'100vh', color:C.text, fontFamily:'system-ui,sans-serif' }}>
       {/* Header */}
+     
       <header style={{ background:C.surface, padding:'0 20px', display:'flex', alignItems:'center', gap:10, height:52, position:'sticky', top:0, zIndex:100, flexDirection:'column', justifyContent:'center' }}>
         {/* Gradient accent bar */}
         <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e60028 0%,#6366f1 45%,#06b6d4 100%)' }} />
@@ -1696,7 +1771,7 @@ export default function OpsBoard() {
                 owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                 onNuevo={() => setShowNuevo(true)} />
             )}
-            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} />}
+            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} />}
             {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
             {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
             {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
@@ -1718,8 +1793,10 @@ export default function OpsBoard() {
             if (keepOpen) setItemActivo(prev => prev && prev.id===id ? { ...prev, ...fields } : prev)
             else setItemActivo(null)
           }}
-          proyectoNames={proyectos.map(p => p.nombre)} />
+          proyectoNames={proyectos.map(p => p.nombre)}
+          onToast={msg => setToast(msg)} />
       )}
+      {toast && <Toast msg={toast} onHide={() => setToast(null)} />}
     </div>
   )
 }
