@@ -34,6 +34,8 @@ const C = {
 const OV_KEY           = 'obs-status-overrides'
 const COMMENTS_KEY     = 'obs-comments'
 const PROJ_COMMENTS_KEY = 'obs-proj-comments'
+const PROY_OV_KEY       = 'obs-proy-overrides'
+const DONE_TS_KEY       = id => `obs-done-ts-${id}`
 
 // Owner colors
 const OWN_COLORS = {
@@ -90,7 +92,12 @@ const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); retu
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
 
 const getOverrides = ()          => lsGet(OV_KEY, {})
-const saveOverride = (k, fields) => { const ov = getOverrides(); ov[k] = { ...(ov[k]||{}), ...fields, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
+const saveOverride     = (k, fields)     => { const ov = getOverrides(); ov[k] = { ...(ov[k]||{}), ...fields, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
+const getProyOverrides = ()              => lsGet(PROY_OV_KEY, {})
+const saveProyOverride = (nombre, flds) => { const ov = getProyOverrides(); const nk = norm(nombre); ov[nk] = {...(ov[nk]||{}), ...flds}; lsSet(PROY_OV_KEY, ov) }
+const saveDoneTs       = id             => { try { if (!localStorage.getItem(DONE_TS_KEY(id))) localStorage.setItem(DONE_TS_KEY(id), Date.now().toString()) } catch {} }
+const getDoneTs        = id             => { try { return parseInt(localStorage.getItem(DONE_TS_KEY(id)) || '0') } catch { return 0 } }
+const isArchived       = item           => item.status === 'done' && getDoneTs(item.id) > 0 && (Date.now() - getDoneTs(item.id)) > 7 * 86400000
 const getComments  = k           => (lsGet(COMMENTS_KEY, []) || []).filter(c => c.k === k)
 const saveComment  = (k, text)   => {
   const all = lsGet(COMMENTS_KEY, []) || []
@@ -434,9 +441,10 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
       {modo === 'kanban' && f.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:kanbanCols, gap:14 }}>
           {ST.map(st => {
-            const col      = f.filter(i => i.status === st.id)
+            const col      = f.filter(i => i.status === st.id && !isArchived(i))
             const limit    = WIP_LIMITS[st.id]
             const overLimit = limit && col.length > limit
+            const archCount = st.id === 'done' ? f.filter(i => i.status === 'done' && isArchived(i)).length : 0
             return (
               <div key={st.id}>
                 {/* Column header */}
@@ -457,6 +465,11 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
                 {overLimit && (
                   <div style={{ fontSize:10, color:'#dc2626', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5, padding:'5px 8px', marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
                     ⚠ WIP superado — mueve o bloquea temas
+                  </div>
+                )}
+                {archCount > 0 && (
+                  <div style={{ fontSize:10, color:C.muted, background:C.surface, border:`1px solid ${C.border}`, borderRadius:5, padding:'5px 8px', marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{ color:'#818cf8' }}>⬡</span> {archCount} tema{archCount!==1?'s':''} en Histórico
                   </div>
                 )}
 
@@ -924,21 +937,37 @@ const GanttChart = ({ temas }) => {
 }
 
 // ── ModalProyecto ─────────────────────────────────────────────────────────────
-const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema, onOpenItem }) => {
+const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, onOpenItem, onUpdate }) => {
+  const [proyecto,     setProyecto]     = useState(proyectoOrig)
   const [tab,          setTab]          = useState('temas')
   const [nc,           setNc]           = useState('')
-  const [comments,     setComments]     = useState(() => getProjectComments(norm(proyecto.nombre)))
+  const [comments,     setComments]     = useState(() => getProjectComments(norm(proyectoOrig.nombre)))
   const [showAddTema,  setShowAddTema]  = useState(false)
   const [newTema,      setNewTema]      = useState('')
   const [newTemaObj,   setNewTemaObj]   = useState('')
   const [newTemaCat,   setNewTemaCat]   = useState('projects')
-  const [newTemaProp,  setNewTemaProp]  = useState(proyecto.propietario || '')
+  const [newTemaProp,  setNewTemaProp]  = useState(proyectoOrig.propietario || '')
+  const [editing,      setEditing]      = useState(false)
+  const [editDesc,     setEditDesc]     = useState(proyectoOrig.descripcion || '')
+  const [editProp,     setEditProp]     = useState(proyectoOrig.propietario || '')
+  const [editFin,      setEditFin]      = useState(proyectoOrig.fechaFin ? fdStr(proyectoOrig.fechaFin) : '')
+  const [editPrio,     setEditPrio]     = useState(proyectoOrig.prioridad || '')
+  const [editStatus,   setEditStatus]   = useState(proyectoOrig.status || 'pending')
 
   useEffect(() => {
-    const h = e => e.key === 'Escape' && onClose()
+    const h = e => e.key === 'Escape' && (editing ? setEditing(false) : onClose())
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
-  }, [])
+  }, [editing])
+
+  const guardarEdicion = () => {
+    const flds = { descripcion:editDesc.trim(), propietario:editProp.trim(), fechaFin:editFin||null, prioridad:editPrio, status:editStatus }
+    saveProyOverride(proyecto.nombre, flds)
+    const updated = { ...proyecto, ...flds, _hasLocalProy:true }
+    setProyecto(updated)
+    onUpdate?.(proyecto.nombre, flds)
+    setEditing(false)
+  }
 
   const temas   = allItems.filter(i => norm(i.proyecto || '') === norm(proyecto.nombre))
   const done    = temas.filter(t => t.status === 'done').length
@@ -999,29 +1028,79 @@ const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema, onOpenItem }) =
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5, flexWrap:'wrap' }}>
                 <span style={{ fontSize:16, fontWeight:700, color:C.text, lineHeight:1.2 }}>{proyecto.nombre}</span>
-                <Tag id={proyecto.status} type="st" />
-                {proyecto.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:3, background:RK.find(r=>r.id===proyecto.risk)?.color+'22', color:RK.find(r=>r.id===proyecto.risk)?.color }}>{proyecto.prioridad}</span>}
+                {!editing && <Tag id={proyecto.status} type="st" />}
+                {!editing && proyecto.prioridad && (() => { const pc=priColor(proyecto.prioridad); return <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{proyecto.prioridad}</span> })()}
+                {proyecto._hasLocalProy && <span style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>~local</span>}
               </div>
-              {proyecto.descripcion && <p style={{ fontSize:12, color:C.muted, lineHeight:1.6, margin:0 }}>{proyecto.descripcion}</p>}
+              {!editing && (proyecto.descripcion
+                ? <p style={{ fontSize:12, color:C.muted, lineHeight:1.6, margin:0 }}>{proyecto.descripcion}</p>
+                : <p style={{ fontSize:12, color:C.border, lineHeight:1.6, margin:0, fontStyle:'italic' }}>Sin descripción</p>)}
             </div>
-            <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, padding:0, flexShrink:0, lineHeight:1 }}>✕</button>
+            <div style={{ display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
+              {!editing
+                ? <button onClick={() => setEditing(true)} style={{ background:C.surface, border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:11, fontWeight:600, cursor:'pointer' }}>Editar</button>
+                : <>
+                    <button onClick={guardarEdicion} style={{ background:C.accent, border:'none', color:'#fff', borderRadius:6, padding:'4px 12px', fontSize:11, fontWeight:600, cursor:'pointer' }}>Guardar</button>
+                    <button onClick={() => setEditing(false)} style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>Cancelar</button>
+                  </>}
+              <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, padding:0, lineHeight:1 }}>✕</button>
+            </div>
           </div>
 
+          {/* Edit form */}
+          {editing && (() => {
+            const iSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 9px', fontSize:12, outline:'none', width:'100%', boxSizing:'border-box' }
+            return (
+              <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:8 }}>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Descripción</div>
+                  <textarea value={editDesc} onChange={e=>setEditDesc(e.target.value)} rows={2} placeholder="Descripción del proyecto…" style={{ ...iSt, resize:'vertical', fontFamily:'inherit' }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Responsable</div>
+                    <input list="owners-proy-edit" value={editProp} onChange={e=>setEditProp(e.target.value)} style={iSt} placeholder="Nombre…" />
+                    <datalist id="owners-proy-edit">{KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}</datalist>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Estado</div>
+                    <select value={editStatus} onChange={e=>setEditStatus(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                      {ST.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Prioridad</div>
+                    <select value={editPrio} onChange={e=>setEditPrio(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                      <option value="">Sin prioridad</option>
+                      {PRIORIDADES.filter(Boolean).map(p=><option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fecha fin</div>
+                    <input type="date" value={editFin} onChange={e=>setEditFin(e.target.value)} style={{ ...iSt, colorScheme:'light' }} />
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Meta row */}
+          {!editing && (
           <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:10, flexWrap:'wrap' }}>
             {proyecto.propietario && (
               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <div style={{ width:20, height:20, borderRadius:'50%', background:oc+'28', border:`1.5px solid ${oc}66`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:oc }}>{iniciales(proyecto.propietario)}</div>
+                <div style={{ width:20, height:20, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff' }}>{iniciales(proyecto.propietario)}</div>
                 <span style={{ fontSize:12, color:C.muted }}>{proyecto.propietario.split(' ')[0]}</span>
               </div>
             )}
-            {proyecto.fechaInicio && <span style={{ fontSize:11, color:C.muted }}>📅 {fmtFecha(fdStr(proyecto.fechaInicio))}</span>}
-            {proyecto.fechaFin && <span style={{ fontSize:11, color:C.muted }}>→ <AlertFecha endDate={proyecto.fechaFin} status={proyecto.status} /></span>}
+            {proyecto.fechaInicio && <span style={{ fontSize:11, color:C.muted }}>Inicio: {fmtFecha(fdStr(proyecto.fechaInicio))}</span>}
+            {proyecto.fechaFin && <span style={{ fontSize:11, color:C.muted }}>Fin: <AlertFecha endDate={proyecto.fechaFin} status={proyecto.status} /></span>}
             <span style={{ fontSize:11, color:C.muted, marginLeft:'auto' }}>
               {temas.length} tema{temas.length!==1?'s':''} · {done} completado{done!==1?'s':''}
               {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
             </span>
           </div>
+          )}
 
           {/* Progress bar */}
           {temas.length > 0 && (
@@ -1145,7 +1224,7 @@ const ModalProyecto = ({ proyecto, allItems, onClose, onAddTema, onOpenItem }) =
 }
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
-const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate }) => {
   const [filtSt,          setFiltSt]          = useState('all')
   const [showSinProyecto, setShowSinProyecto] = useState(false)
   const [modalProy,       setModalProy]       = useState(null)
@@ -1382,6 +1461,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
           onClose={() => setModalProy(null)}
           onAddTema={tema => { onAddTema(tema) }}
           onOpenItem={item => { setModalProy(null); onOpenItem?.(item) }}
+          onUpdate={(nombre, fields) => { onUpdate?.(nombre, fields); setModalProy(prev => prev ? {...prev,...fields,_hasLocalProy:true} : prev) }}
         />
       )}
     </div>
@@ -1893,9 +1973,89 @@ const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [], onToast })
   )
 }
 
+// ── Histórico ─────────────────────────────────────────────────────────────────
+const Historico = ({ items }) => {
+  const [q, setQ] = useState('')
+  const [prioF, setPrioF] = useState('')
+
+  const archived = items.filter(i => isArchived(i))
+  const filtered = archived.filter(i => {
+    const mq = !q || norm(i.tema).includes(norm(q)) || norm(i.propietario||'').includes(norm(q))
+    const mp = !prioF || i.prioridad === prioF
+    return mq && mp
+  }).sort((a,b) => getDoneTs(b.id) - getDoneTs(a.id))
+
+  const byMonth = {}
+  filtered.forEach(i => {
+    const d   = new Date(getDoneTs(i.id))
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+    const lbl = d.toLocaleString('es', { month:'long', year:'numeric' })
+    if (!byMonth[key]) byMonth[key] = { lbl, items:[] }
+    byMonth[key].items.push(i)
+  })
+
+  const inputSt = { background:C.surface, border:`1px solid ${C.border}`, color:C.text, borderRadius:7, padding:'6px 10px', fontSize:12, outline:'none' }
+
+  return (
+    <div style={{ padding:'0 24px 32px' }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+        <div>
+          <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:C.text }}>⧆ Histórico</h2>
+          <p style={{ margin:0, fontSize:12, color:C.muted, marginTop:2 }}>Temas completados hace más de 7 días · {archived.length} total</p>
+        </div>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8, flexWrap:'wrap' }}>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar…" style={{ ...inputSt, width:180 }} />
+          <select value={prioF} onChange={e=>setPrioF(e.target.value)} style={{ ...inputSt, cursor:'pointer' }}>
+            <option value="">Todas las prioridades</option>
+            {PRIORIDADES.filter(Boolean).map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {filtered.length === 0 && (
+        <div style={{ textAlign:'center', padding:'60px 0', color:C.muted }}>
+          <div style={{ fontSize:36, marginBottom:12 }}>📭</div>
+          <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Sin items en el histórico</div>
+          <div style={{ fontSize:12 }}>Los temas completados aparecerán aquí tras 7 días en "Completados"</div>
+        </div>
+      )}
+
+      {Object.keys(byMonth).sort((a,b) => b.localeCompare(a)).map(key => (
+        <div key={key} style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingBottom:6, borderBottom:`1px solid ${C.border}` }}>
+            {byMonth[key].lbl} · {byMonth[key].items.length} tema{byMonth[key].items.length!==1?'s':''}
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+            {byMonth[key].items.map(item => {
+              const pc = priColor(item.prioridad)
+              const oc = ownerColor(item.propietario)
+              const doneDate = new Date(getDoneTs(item.id)).toLocaleDateString('es', { day:'numeric', month:'short' })
+              return (
+                <div key={item.id} style={{ display:'flex', alignItems:'center', gap:10, background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:'8px 12px', opacity:0.85 }}>
+                  <div style={{ width:16, height:16, borderRadius:'50%', background:'#10b98122', border:'1.5px solid #10b981', display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, color:'#10b981', flexShrink:0 }}>✓</div>
+                  {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:pc.bg, color:pc.color, flexShrink:0 }}>{item.prioridad}</span>}
+                  <span style={{ fontSize:13, color:C.text, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.tema}</span>
+                  {item.proyecto && <span style={{ fontSize:11, color:C.muted, flexShrink:0, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.proyecto}</span>}
+                  {item.propietario && (
+                    <div style={{ width:20, height:20, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff', flexShrink:0 }} title={item.propietario}>
+                      {iniciales(item.propietario)}
+                    </div>
+                  )}
+                  <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>✓ {doneDate}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function OpsBoard() {
-  const [vista,       setVista]      = useState('Tablero')
+  const [vista,       setVista]      = useState('Dashboard')
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
   const [proyectos,   setProyectos]  = useState([])
@@ -1935,12 +2095,24 @@ export default function OpsBoard() {
   const onNextSt = async (id, newSt) => {
     const item = allItems.find(i => i.id===id)
     if (!item) return
+    if (newSt === 'done') saveDoneTs(id)
     saveOverride(norm(item.tema), { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
     try { await apiUpdate(item.tema, { estado: ST_TO_SHEET[newSt] }) } catch {}
     onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
   }
 
-  const VISTAS = ['Tablero','🗂️ Proyectos','Dashboard','📅 Campañas CVM','✨ IA Intake','📋 Reporte Semanal']
+  const proyectosConOv = proyectos.map(p => {
+    const ov = getProyOverrides()[norm(p.nombre)] || {}
+    return Object.keys(ov).length > 0 ? { ...p, ...ov, _hasLocalProy:true } : p
+  })
+  const onProyUpdate = (nombre, fields) =>
+    setProyectos(prev => prev.map(p => norm(p.nombre)===norm(nombre) ? {...p,...fields,_hasLocalProy:true} : p))
+
+  useEffect(() => {
+    allItems.filter(i => i.status === 'done').forEach(i => saveDoneTs(i.id))
+  }, [items.length])
+
+  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   return (
     <div style={{ background:C.bg, minHeight:'100vh', color:C.text, fontFamily:'system-ui,sans-serif' }}>
@@ -1996,11 +2168,12 @@ export default function OpsBoard() {
                 owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                 onNuevo={() => setShowNuevo(true)} />
             )}
-            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} />}
+            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} />}
             {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
             {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
             {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
             {vista === '📋 Reporte Semanal' && <Reporte items={allItems} />}
+            {vista === '⧆ Histórico'        && <Historico items={allItems} />}
           </>
         )}
       </div>
