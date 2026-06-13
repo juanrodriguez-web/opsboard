@@ -1149,9 +1149,17 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
   const [filtSt,          setFiltSt]          = useState('all')
   const [showSinProyecto, setShowSinProyecto] = useState(false)
   const [modalProy,       setModalProy]       = useState(null)
+  const [modo,            setModo]            = useState('cards')
 
   const temasOf  = nombre => allItems.filter(i => norm(i.proyecto||'') === norm(nombre))
-  const filtered = proyectos.filter(p => filtSt === 'all' || p.status === filtSt)
+  const filtered = [...proyectos.filter(p => filtSt === 'all' || p.status === filtSt)]
+    .sort((a, b) => {
+      const aDone = a.status === 'done', bDone = b.status === 'done'
+      if (aDone !== bDone) return aDone ? 1 : -1
+      const aD = a.fechaFin ? new Date(fdStr(a.fechaFin)).getTime() : Infinity
+      const bD = b.fechaFin ? new Date(fdStr(b.fechaFin)).getTime() : Infinity
+      return aD - bD
+    })
 
   if (proyectos.length === 0) return (
     <div style={{ paddingTop:24, maxWidth:600 }}>
@@ -1193,8 +1201,8 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
         ))}
       </div>
 
-      {/* Filtros */}
-      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
+      {/* Filtros + toggle vista */}
+      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap', alignItems:'center' }}>
         {[{id:'all',label:'Todos',color:C.muted},...ST].map(s => {
           const on  = filtSt === s.id
           const col = s.color || C.muted
@@ -1208,6 +1216,13 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
             </button>
           )
         })}
+        <div style={{ marginLeft:'auto', display:'flex', gap:4 }}>
+          {[{id:'cards',l:'⊞'},{id:'list',l:'☰'}].map(v => (
+            <button key={v.id} onClick={() => setModo(v.id)} title={v.id==='cards'?'Vista Cards':'Vista Lista'}
+              style={{ padding:'4px 9px', borderRadius:6, fontSize:13, border:`1px solid ${C.border}`,
+                background:modo===v.id?C.accent+'22':C.card, color:modo===v.id?C.accent:C.muted, cursor:'pointer' }}>{v.l}</button>
+          ))}
+        </div>
       </div>
 
       {/* Sin proyecto collapsible */}
@@ -1244,9 +1259,9 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
         )
       })()}
 
-      {/* Project cards grid */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:14 }}>
-        {filtered.map((p, i) => {
+      {/* ── Cards / Lista (toggle) ── */}
+      {(() => {
+        const projRows = filtered.map(p => {
           const temas     = temasOf(p.nombre)
           const done      = temas.filter(t => t.status==='done').length
           const blocked   = temas.filter(t => t.status==='blocked').length
@@ -1255,64 +1270,109 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem }) => {
           const catCounts = CATS.map(c => ({ c, n:temas.filter(t=>t.category===c.id).length })).sort((a,b)=>b.n-a.n)
           const accentCol = catCounts[0]?.n > 0 ? catCounts[0].c.color : C.accent
           const stData    = ST.find(s=>s.id===p.status)
+          const pc        = priColor(p.prioridad)
+          const dias      = p.fechaFin && p.status!=='done' ? diasRestantes(fdStr(p.fechaFin)) : null
+          const diasColor = dias === null ? C.muted : dias < 0 ? '#dc2626' : dias <= 7 ? '#d97706' : C.muted
+          const diasLabel = dias === null ? null : dias < 0 ? `Vencido ${Math.abs(dias)}d` : dias === 0 ? 'Vence hoy' : `${dias}d`
+          return { p, temas, done, blocked, pct, oc, accentCol, stData, pc, dias, diasColor, diasLabel }
+        })
 
-          return (
-            <div key={p.id} className="proj-card" onClick={() => setModalProy(p)}
-              style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden', cursor:'pointer', animation:`cardIn 300ms cubic-bezier(0.23,1,0.32,1) ${i*55}ms both` }}>
-
-              {/* Top accent bar: gradient project color → status color */}
-              <div style={{ height:3, background:`linear-gradient(90deg,${accentCol},${stData?.color||C.muted})` }} />
-
-              <div style={{ padding:'14px 16px 16px' }}>
-                {/* Title + status */}
-                <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:8 }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:C.text, lineHeight:1.3, marginBottom:3 }}>{p.nombre}</div>
-                    {p.descripcion && <div style={{ fontSize:11, color:C.muted, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{p.descripcion}</div>}
+        if (modo === 'cards') return (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:14 }}>
+            {projRows.map(({ p, temas, blocked, pct, oc, accentCol, stData, pc, dias, diasColor, diasLabel }, i) => (
+              <div key={p.id} className="proj-card" onClick={() => setModalProy(p)}
+                style={{ background:C.card, border:`1px solid ${dias!==null&&dias<0?'#fca5a555':C.border}`, borderRadius:10, overflow:'hidden', cursor:'pointer', animation:`cardIn 300ms cubic-bezier(0.23,1,0.32,1) ${i*45}ms both` }}>
+                <div style={{ height:3, background:`linear-gradient(90deg,${accentCol},${stData?.color||C.muted})` }} />
+                <div style={{ padding:'14px 16px 16px' }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:7 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:C.text, lineHeight:1.3, marginBottom:3 }}>{p.nombre}</div>
+                      {p.descripcion && <div style={{ fontSize:11, color:C.muted, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{p.descripcion}</div>}
+                    </div>
+                    <Tag id={p.status} type="st" />
                   </div>
-                  <Tag id={p.status} type="st" />
-                </div>
-
-                {/* Meta: owner · prioridad · fecha */}
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, flexWrap:'wrap' }}>
-                  {p.propietario && (
-                    <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                      <div style={{ width:18, height:18, borderRadius:'50%', background:oc+'28', border:`1.5px solid ${oc}66`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:oc }}>{iniciales(p.propietario)}</div>
-                      <span style={{ fontSize:11, color:C.muted }}>{p.propietario.split(' ')[0]}</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, flexWrap:'wrap' }}>
+                    {p.propietario && (
+                      <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <div style={{ width:18, height:18, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff' }}>{iniciales(p.propietario)}</div>
+                        <span style={{ fontSize:11, color:C.muted }}>{p.propietario.split(' ')[0]}</span>
+                      </div>
+                    )}
+                    {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{p.prioridad}</span>}
+                    {diasLabel && <span style={{ fontSize:10, fontWeight:dias!==null&&dias<=7?700:400, color:diasColor }}>{diasLabel}</span>}
+                    <span style={{ fontSize:10, color:C.muted, marginLeft:'auto' }}>
+                      {temas.length} tema{temas.length!==1?'s':''}
+                      {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
+                    </span>
+                  </div>
+                  {temas.length > 0 ? (
+                    <div>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                          {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; return n?<span key={s.id} style={{ fontSize:9, color:s.color, fontWeight:600 }}>{n} {s.label}</span>:null })}
+                        </div>
+                        <span style={{ fontSize:11, fontWeight:700, color:accentCol }}>{pct}%</span>
+                      </div>
+                      <div style={{ height:6, background:C.surface, borderRadius:3, overflow:'hidden', display:'flex', gap:1 }}>
+                        {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; const w=temas.length>0?n/temas.length*100:0; return w>0?<div key={s.id} style={{ width:`${w}%`, background:s.color, transition:'width .5s cubic-bezier(0.23,1,0.32,1)' }}/>:null })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:11, color:C.muted, fontStyle:'italic', display:'flex', alignItems:'center', gap:6 }}>
+                      <span>Sin temas vinculados</span>
+                      <span style={{ fontSize:10, color:C.accent, background:C.accent+'22', padding:'1px 6px', borderRadius:4, fontStyle:'normal', fontWeight:600 }}>+ Añadir</span>
                     </div>
                   )}
-                  {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:RK.find(r=>r.id===p.risk)?.color+'22', color:RK.find(r=>r.id===p.risk)?.color }}>{p.prioridad}</span>}
-                  {p.fechaFin && <AlertFecha endDate={p.fechaFin} status={p.status} />}
-                  <span style={{ fontSize:10, color:C.muted, marginLeft:'auto' }}>
-                    {temas.length} tema{temas.length!==1?'s':''}
-                    {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+
+        /* Vista Lista */
+        return (
+          <div style={{ background:C.card, borderRadius:10, border:`1px solid ${C.border}`, overflow:'hidden' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 100px 70px 130px 80px 80px 100px', padding:'8px 14px', borderBottom:`1px solid ${C.border}`, fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'.05em' }}>
+              <span>Proyecto</span><span>Estado</span><span>Prio.</span><span>Responsable</span><span>Progreso</span><span>Temas</span><span>Plazo</span>
+            </div>
+            {projRows.length === 0
+              ? <div style={{ padding:24, textAlign:'center', color:C.muted, fontSize:13 }}>Sin proyectos</div>
+              : projRows.map(({ p, temas, blocked, pct, oc, accentCol, pc, dias, diasColor, diasLabel }) => (
+                <div key={p.id} onClick={() => setModalProy(p)}
+                  style={{ display:'grid', gridTemplateColumns:'2fr 100px 70px 130px 80px 80px 100px', padding:'10px 14px', borderBottom:`1px solid ${C.border}`, cursor:'pointer', alignItems:'center', fontSize:12 }}
+                  onMouseEnter={e => e.currentTarget.style.background=C.surface}
+                  onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, overflow:'hidden' }}>
+                    <div style={{ width:3, height:18, borderRadius:2, background:accentCol, flexShrink:0 }} />
+                    <div style={{ overflow:'hidden' }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.nombre}</div>
+                      {blocked > 0 && <div style={{ fontSize:10, color:'#f43f5e', fontWeight:600 }}>{blocked} bloqueado{blocked!==1?'s':''}</div>}
+                    </div>
+                  </div>
+                  <Tag id={p.status} type="st" />
+                  <span>{p.prioridad ? <span style={{ fontSize:10, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{p.prioridad}</span> : <span style={{ color:C.muted }}>—</span>}</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <div style={{ width:16, height:16, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:'#fff', flexShrink:0 }}>{iniciales(p.propietario)}</div>
+                    <span style={{ fontSize:11, color:C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{(p.propietario||'—').split(' ')[0]}</span>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <div style={{ flex:1, height:5, background:C.surface, borderRadius:3, overflow:'hidden', minWidth:28 }}>
+                      <div style={{ width:`${pct}%`, height:'100%', background:accentCol }} />
+                    </div>
+                    <span style={{ fontSize:10, fontWeight:700, color:accentCol }}>{pct}%</span>
+                  </div>
+                  <span style={{ fontSize:11, color:C.muted }}>
+                    {temas.length}{blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked}b</span>}
+                  </span>
+                  <span style={{ fontSize:11, fontWeight:dias!==null&&dias<=7?700:400, color:diasColor }}>
+                    {diasLabel || (p.fechaFin ? fmtFecha(fdStr(p.fechaFin)) : '—')}
                   </span>
                 </div>
-
-                {/* Progress */}
-                {temas.length > 0 ? (
-                  <div>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
-                      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                        {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; return n?<span key={s.id} style={{ fontSize:9, color:s.color, fontWeight:600 }}>{n} {s.label}</span>:null })}
-                      </div>
-                      <span style={{ fontSize:11, fontWeight:700, color:accentCol }}>{pct}%</span>
-                    </div>
-                    <div style={{ height:5, background:C.surface, borderRadius:3, overflow:'hidden', display:'flex', gap:1 }}>
-                      {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; const w=temas.length>0?n/temas.length*100:0; return w>0?<div key={s.id} style={{ width:`${w}%`, background:s.color, transition:'width .5s cubic-bezier(0.23,1,0.32,1)' }}/>:null })}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize:11, color:C.muted, fontStyle:'italic', display:'flex', alignItems:'center', gap:6 }}>
-                    <span>Sin temas vinculados</span>
-                    <span style={{ fontSize:10, color:C.accent, background:C.accent+'22', padding:'1px 6px', borderRadius:4, fontStyle:'normal', fontWeight:600 }}>+ Añadir</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+              ))
+            }
+          </div>
+        )
+      })()}
 
       {/* Modal proyecto */}
       {modalProy && (
@@ -1515,15 +1575,18 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
 
 // ── Nuevo Tema modal ──────────────────────────────────────────────────────────
 const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
-  const [tema,  setTema]  = useState('')
-  const [obj,   setObj]   = useState('')
-  const [cat,   setCat]   = useState('projects')
-  const [prop,  setProp]  = useState('')
-  const [prio,  setPrio]  = useState('')
-  const [fecha, setFecha] = useState('')
-  const [proy,  setProy]  = useState('')
+  const [tema,   setTema]   = useState('')
+  const [obj,    setObj]    = useState('')
+  const [cat,    setCat]    = useState('projects')
+  const [prop,   setProp]   = useState('')
+  const [prio,   setPrio]   = useState('')
+  const [fecha,  setFecha]  = useState('')
+  const [proy,   setProy]   = useState('')
+  const [status, setStatus] = useState('pending')
 
   const inputSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+
+  const statusOpts = ST.map(s => ({ v:s.id, l:s.label }))
 
   const guardar = () => {
     if (!tema.trim()) return
@@ -1531,7 +1594,7 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
       id: uid(), tema: tema.trim(), objetivo: obj.trim(),
       category: cat, propietario: prop.trim(),
       prioridad: prio, risk: mapRisk(prio),
-      status: 'pending', estadoSheet: 'No iniciado',
+      status, estadoSheet: ST.find(s=>s.id===status)?.label || 'No iniciado',
       fechaInicio: null, fechaFin: fecha || null,
       proyecto: proy.trim(),
       archivos: '', notas: 'Creado manualmente en OpsBoard',
@@ -1545,20 +1608,21 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
       onClick={e => e.target===e.currentTarget&&onClose()}>
       <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:580, overflow:'hidden', display:'flex', flexDirection:'column' }}>
         <div style={{ padding:'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:16 }}>➕</span>
+          <div style={{ width:28, height:28, borderRadius:6, background:C.accent+'22', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke={C.accent} strokeWidth="2" strokeLinecap="round"/></svg>
+          </div>
           <h3 style={{ flex:1, fontSize:15, fontWeight:700, color:C.text }}>Nuevo tema</h3>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18 }}>✕</button>
+          <button onClick={onClose} aria-label="Cerrar" style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18, lineHeight:1 }}>✕</button>
         </div>
         <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12 }}>
           <div>
             <Lbl>Tema *</Lbl>
             <input value={tema} onChange={e=>setTema(e.target.value)} placeholder="Nombre del tema…"
-              style={inputSt} autoFocus
-              onKeyDown={e=>e.key==='Enter'&&guardar()} />
+              style={inputSt} autoFocus onKeyDown={e=>e.key==='Enter'&&guardar()} />
           </div>
           <div>
             <Lbl>Objetivo</Lbl>
-            <TA value={obj} onChange={setObj} placeholder="Qué se quiere conseguir…" rows={2} />
+            <TA value={obj} onChange={setObj} placeholder="Qué se quiere conseguir con este tema…" rows={2} />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             <div>
@@ -1570,31 +1634,36 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
               <Sel value={prio} onChange={setPrio} opts={PRIORIDADES.map(p=>({v:p,l:p||'Sin prioridad'}))} style={{ width:'100%' }} />
             </div>
             <div>
-              <Lbl>Propietario</Lbl>
-              <input list="owners-list-nuevo" value={prop} onChange={e=>setProp(e.target.value)}
-                placeholder="Nombre…" style={inputSt} />
-              <datalist id="owners-list-nuevo">
-                {KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}
-              </datalist>
+              <Lbl>Estado inicial</Lbl>
+              <Sel value={status} onChange={setStatus} opts={statusOpts} style={{ width:'100%' }} />
             </div>
             <div>
               <Lbl>Fecha fin</Lbl>
               <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
                 style={{ ...inputSt, colorScheme:'light' }} />
             </div>
+            <div style={{ gridColumn:'1 / -1' }}>
+              <Lbl>Propietario</Lbl>
+              <input list="owners-list-nuevo" value={prop} onChange={e=>setProp(e.target.value)}
+                placeholder="Nombre del responsable…" style={inputSt} />
+              <datalist id="owners-list-nuevo">
+                {KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}
+              </datalist>
+            </div>
           </div>
           <div>
             <Lbl>Proyecto (opcional)</Lbl>
             <input list="proyectos-list-nuevo" value={proy} onChange={e=>setProy(e.target.value)}
-              placeholder="Nombre del proyecto al que pertenece…" style={inputSt} />
+              placeholder="Nombre exacto del proyecto al que pertenece…" style={inputSt} />
             <datalist id="proyectos-list-nuevo">
               {proyectoNames.map(n=><option key={n} value={n}/>)}
             </datalist>
+            <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Debe coincidir con un proyecto existente en el Sheet para vincularse correctamente.</div>
           </div>
         </div>
         <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end', gap:8 }}>
           <Btn v="sec" onClick={onClose}>Cancelar</Btn>
-          <Btn onClick={guardar} disabled={!tema.trim()}>➕ Crear tema</Btn>
+          <Btn onClick={guardar} disabled={!tema.trim()}>Crear tema</Btn>
         </div>
       </div>
     </div>
