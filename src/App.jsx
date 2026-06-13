@@ -2109,7 +2109,11 @@ export default function OpsBoard() {
     setProyectos(prev => prev.map(p => norm(p.nombre)===norm(nombre) ? {...p,...fields,_hasLocalProy:true} : p))
 
   useEffect(() => {
-    allItems.filter(i => i.status === 'done').forEach(i => saveDoneTs(i.id))
+    // Items ya completados en el sheet → timestamp de hace 8 días → van directo a Histórico
+    const OLD_TS = Date.now() - 8 * 86400000
+    allItems.filter(i => i.status === 'done').forEach(i => {
+      try { if (!localStorage.getItem(DONE_TS_KEY(i.id))) localStorage.setItem(DONE_TS_KEY(i.id), OLD_TS.toString()) } catch {}
+    })
   }, [items.length])
 
   const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
