@@ -6,6 +6,12 @@ export const norm = s =>
 export const mapSt = s => {
   const n = norm(s)
   if (n === 'no iniciado')            return 'pending'
+  if (n === 'not started')            return 'pending'
+  if (n === 'en riesgo')              return 'blocked'
+  if (n === 'at risk')                return 'blocked'
+  if (n === 'completado')             return 'done'
+  if (n === 'completed')              return 'done'
+  if (n === 'in progress')            return 'inprogress'
   if (n === 'según lo planificado')   return 'inprogress'
   if (n === 'en curso')               return 'inprogress'
   if (n === 'bau')                    return 'inprogress'
@@ -111,14 +117,18 @@ export function parseProyectos(tables) {
   )
   if (!t) return []
   const col = key => t.heads.find(h => norm(h) === norm(key)) || ''
-  const fNombre = col('Nombre')
+  const fNombre      = col('Nombre')
   const fDesc   = col('Descripción') || col('Descripcion')
   const fEstado = col('Estado')
   const fPrio   = col('Prioridad')
   const fProp   = col('Propietario')
   const fIni    = col('Fecha inicio')
   const fFin    = col('Fecha fin')
-  const fNotas  = col('Notas')
+  const fNotas       = col('Notas')
+  const fDesarrollo  = col('Desarrollo') || col('Development') || ''
+  const fFase        = col('Fase') || col('Phase') || ''
+  const fCapex       = col('CAPEX') || col('Capex') || col('capex') || ''
+  const fNombreEN    = col('Nombre EN') || col('Nombre_EN') || col('English Name') || col('Name EN') || ''
   return t.rows
     .filter(r => fNombre && r[fNombre]?.trim())
     .map(r => ({
@@ -133,6 +143,10 @@ export function parseProyectos(tables) {
       fechaInicio: parseFecha(fIni ? r[fIni] || '' : ''),
       fechaFin:    parseFecha(fFin ? r[fFin] || '' : ''),
       notas:       fNotas ? r[fNotas] || '' : '',
+      desarrollo:  fDesarrollo && r[fDesarrollo] ? r[fDesarrollo].trim() : '',
+      fase:        fFase       && r[fFase]       ? r[fFase].trim()       : '',
+      capex:       fCapex && r[fCapex] ? (parseFloat(String(r[fCapex]).replace(/[^0-9.]/g,''))||null) : null,
+      nombreEN:    fNombreEN  && r[fNombreEN]  ? r[fNombreEN].trim()  : '',
     }))
 }
 

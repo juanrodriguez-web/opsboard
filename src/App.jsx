@@ -58,6 +58,16 @@ const priColor = p => PRI_COLORS[p] || { bg:C.surface, color:C.muted }
 // WIP limits per column (null = no limit)
 const WIP_LIMITS = { pending:null, inprogress:8, blocked:null, done:null }
 
+const FASES = [
+  { id:'RTM',             label:'RTM',              labelEN:'RTM',             pct:10  },
+  { id:'Viabilidad',      label:'Viabilidad',       labelEN:'Feasibility',     pct:25  },
+  { id:'Business case',   label:'Business case',    labelEN:'Business case',   pct:30  },
+  { id:'Comite de capex', label:'Comité de capex',  labelEN:'Capex Committee', pct:30  },
+  { id:'Desarrollo',      label:'Desarrollo',       labelEN:'Development',     pct:100 },
+]
+const fasePct = fase => { if(!fase) return 0; const f=FASES.find(f=>norm(f.id)===norm(fase)); return f?f.pct:0 }
+const faseLabel = (fase,lng='es') => { if(!fase) return '—'; const f=FASES.find(f=>norm(f.id)===norm(fase)); return f?(lng==='en'?f.labelEN:f.label):fase }
+
 // CVM campaign helpers
 const TIPO_COLORS = {
   'oferta one shot':'#d97706', 'oferta':'#d97706',
@@ -937,7 +947,7 @@ const GanttChart = ({ temas }) => {
 }
 
 // ── ModalProyecto ─────────────────────────────────────────────────────────────
-const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, onOpenItem, onUpdate }) => {
+const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, onOpenItem, onUpdate, lang='es' }) => {
   const [proyecto,     setProyecto]     = useState(proyectoOrig)
   const [tab,          setTab]          = useState('temas')
   const [nc,           setNc]           = useState('')
@@ -952,7 +962,11 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   const [editProp,     setEditProp]     = useState(proyectoOrig.propietario || '')
   const [editFin,      setEditFin]      = useState(proyectoOrig.fechaFin ? fdStr(proyectoOrig.fechaFin) : '')
   const [editPrio,     setEditPrio]     = useState(proyectoOrig.prioridad || '')
-  const [editStatus,   setEditStatus]   = useState(proyectoOrig.status || 'pending')
+  const [editStatus,     setEditStatus]     = useState(proyectoOrig.status || 'pending')
+  const [editDesarrollo, setEditDesarrollo] = useState(proyectoOrig.desarrollo || '')
+  const [editFase,       setEditFase]       = useState(proyectoOrig.fase || '')
+  const [editCapex,      setEditCapex]      = useState(proyectoOrig.capex!=null?String(proyectoOrig.capex):'')
+  const [editNombreEN,   setEditNombreEN]   = useState(proyectoOrig.nombreEN || '')
 
   useEffect(() => {
     const h = e => e.key === 'Escape' && (editing ? setEditing(false) : onClose())
@@ -961,7 +975,8 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   }, [editing])
 
   const guardarEdicion = () => {
-    const flds = { descripcion:editDesc.trim(), propietario:editProp.trim(), fechaFin:editFin||null, prioridad:editPrio, status:editStatus }
+    const flds = { descripcion:editDesc.trim(), propietario:editProp.trim(), fechaFin:editFin||null, prioridad:editPrio, status:editStatus,
+      desarrollo:editDesarrollo.trim(), fase:editFase, capex:editCapex?parseFloat(editCapex)||null:null, nombreEN:editNombreEN.trim() }
     saveProyOverride(proyecto.nombre, flds)
     const updated = { ...proyecto, ...flds, _hasLocalProy:true }
     setProyecto(updated)
@@ -1031,10 +1046,31 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
                 {!editing && <Tag id={proyecto.status} type="st" />}
                 {!editing && proyecto.prioridad && (() => { const pc=priColor(proyecto.prioridad); return <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{proyecto.prioridad}</span> })()}
                 {proyecto._hasLocalProy && <span style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>~local</span>}
+                {!editing && proyecto.desarrollo && (() => { const vf=norm(proyecto.desarrollo)==='vodafone'; return <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:vf?'#e8001c18':'#1a5fe318', color:vf?'#b30016':'#1244a8' }}>{proyecto.desarrollo}</span> })()}
               </div>
               {!editing && (proyecto.descripcion
-                ? <p style={{ fontSize:12, color:C.muted, lineHeight:1.6, margin:0 }}>{proyecto.descripcion}</p>
-                : <p style={{ fontSize:12, color:C.border, lineHeight:1.6, margin:0, fontStyle:'italic' }}>Sin descripción</p>)}
+                ? <p style={{ fontSize:12, color:C.muted, lineHeight:1.6, margin:'4px 0 0' }}>{proyecto.descripcion}</p>
+                : <p style={{ fontSize:12, color:C.border, lineHeight:1.6, margin:'4px 0 0', fontStyle:'italic' }}>Sin descripción</p>)}
+              {!editing && proyecto.fase && (() => {
+                const curPct = fasePct(proyecto.fase)
+                return (
+                  <div style={{ marginTop:8 }}>
+                    <div style={{ display:'flex', gap:2, marginBottom:3 }}>
+                      {FASES.map(f => {
+                        const active = norm(f.id)===norm(proyecto.fase)
+                        const done   = f.pct <= curPct
+                        return (
+                          <div key={f.id} style={{ flex:1 }}>
+                            <div style={{ height:4, borderRadius:2, background:active?C.accent:done?C.accent+'55':C.border, marginBottom:2 }} />
+                            <span style={{ fontSize:8, color:active?C.accent:C.muted, fontWeight:active?700:400, whiteSpace:'nowrap' }}>{lang==='en'?f.labelEN:f.label}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div style={{ fontSize:10, color:C.muted, textAlign:'right', marginTop:2 }}>Avance estimado: <strong style={{ color:C.accent }}>{curPct}%</strong></div>
+                  </div>
+                )
+              })()}
             </div>
             <div style={{ display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
               {!editing
@@ -1055,6 +1091,32 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
                 <div>
                   <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Descripción</div>
                   <textarea value={editDesc} onChange={e=>setEditDesc(e.target.value)} rows={2} placeholder="Descripción del proyecto…" style={{ ...iSt, resize:'vertical', fontFamily:'inherit' }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Desarrollo</div>
+                    <select value={editDesarrollo} onChange={e=>setEditDesarrollo(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                      <option value="">—</option>
+                      <option value="Vodafone">Vodafone</option>
+                      <option value="Sercom">Sercom</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fase</div>
+                    <select value={editFase} onChange={e=>setEditFase(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                      <option value="">—</option>
+                      <option value="TO DO">TO DO</option>
+                      {FASES.map(f=><option key={f.id} value={f.id}>{f.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>CAPEX (€)</div>
+                    <input type="number" value={editCapex} onChange={e=>setEditCapex(e.target.value)} style={iSt} placeholder="0" min="0" step="1000" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Nombre EN</div>
+                    <input value={editNombreEN} onChange={e=>setEditNombreEN(e.target.value)} style={iSt} placeholder="English name…" />
+                  </div>
                 </div>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8 }}>
                   <div>
@@ -1095,6 +1157,8 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
             )}
             {proyecto.fechaInicio && <span style={{ fontSize:11, color:C.muted }}>Inicio: {fmtFecha(fdStr(proyecto.fechaInicio))}</span>}
             {proyecto.fechaFin && <span style={{ fontSize:11, color:C.muted }}>Fin: <AlertFecha endDate={proyecto.fechaFin} status={proyecto.status} /></span>}
+            {proyecto.capex!=null && <span style={{ fontSize:11, color:C.muted }}>CAPEX: <strong style={{ color:C.text }}>{Number(proyecto.capex).toLocaleString('es')} €</strong></span>}
+            {lang==='en' && proyecto.nombreEN && <span style={{ fontSize:10, color:C.muted, fontStyle:'italic' }}>{proyecto.nombreEN}</span>}
             <span style={{ fontSize:11, color:C.muted, marginLeft:'auto' }}>
               {temas.length} tema{temas.length!==1?'s':''} · {done} completado{done!==1?'s':''}
               {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
@@ -1224,7 +1288,7 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
 }
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
-const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate }) => {
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang='es' }) => {
   const [filtSt,          setFiltSt]          = useState('all')
   const [showSinProyecto, setShowSinProyecto] = useState(false)
   const [modalProy,       setModalProy]       = useState(null)
@@ -1252,7 +1316,8 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate }) => 
     </div>
   )
 
-  const totalTemas  = allItems.filter(i => i.proyecto && i.proyecto.trim()).length
+  const totalTemas    = allItems.filter(i => i.proyecto && i.proyecto.trim()).length
+  const totalCapex    = proyectos.reduce((s,p) => s+(p.capex||0), 0)
   const sinProyecto = allItems.filter(i => !i.proyecto || !i.proyecto.trim()).length
 
   return (
@@ -1378,12 +1443,27 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate }) => 
                       </div>
                     )}
                     {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{p.prioridad}</span>}
+                    {p.desarrollo && (() => { const isVF=norm(p.desarrollo)==='vodafone'; return <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:isVF?'#e8001c18':'#1a5fe318', color:isVF?'#b30016':'#1244a8' }}>{p.desarrollo}</span> })()}
                     {diasLabel && <span style={{ fontSize:10, fontWeight:dias!==null&&dias<=7?700:400, color:diasColor }}>{diasLabel}</span>}
                     <span style={{ fontSize:10, color:C.muted, marginLeft:'auto' }}>
                       {temas.length} tema{temas.length!==1?'s':''}
                       {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
                     </span>
                   </div>
+                  {p.fase && (() => {
+                    const pct = fasePct(p.fase)
+                    return (
+                      <div style={{ marginBottom:8 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                          <span style={{ fontSize:9, color:C.muted }}>{lang==='en'?faseLabel(p.fase,'en'):p.fase}</span>
+                          <span style={{ fontSize:9, fontWeight:700, color:C.accent }}>{pct}%</span>
+                        </div>
+                        <div style={{ height:3, background:C.border, borderRadius:2 }}>
+                          <div style={{ height:'100%', width:`${pct}%`, background:C.accent, borderRadius:2 }} />
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {temas.length > 0 ? (
                     <div>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
@@ -1462,6 +1542,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate }) => 
           onAddTema={tema => { onAddTema(tema) }}
           onOpenItem={item => { setModalProy(null); onOpenItem?.(item) }}
           onUpdate={(nombre, fields) => { onUpdate?.(nombre, fields); setModalProy(prev => prev ? {...prev,...fields,_hasLocalProy:true} : prev) }}
+          lang={lang}
         />
       )}
     </div>
@@ -1548,11 +1629,34 @@ const IAIntake = ({ onAdd }) => {
 }
 
 // ── Reporte Semanal ───────────────────────────────────────────────────────────
-const Reporte = ({ items }) => {
+const Reporte = ({ items, proyectos=[], lang='es' }) => {
   const [txt, setTxt]       = useState('')
   const [busy, setBusy]     = useState(false)
   const [fmt, setFmt]       = useState('email')
   const [copied, setCopied] = useState(false)
+  const [rpTab, setRpTab]   = useState('tracking')
+
+  const MONTHS_ES = ['abr-26','may-26','jun-26','jul-26','ago-26','sep-26','oct-26','nov-26','dic-26','ene-27','feb-27','mar-27']
+  const MONTHS_EN = ['Apr-26','May-26','Jun-26','Jul-26','Aug-26','Sep-26','Oct-26','Nov-26','Dec-26','Jan-27','Feb-27','Mar-27']
+  const MONTHS    = lang==='en' ? MONTHS_EN : MONTHS_ES
+  const MONTH_STARTS = [
+    new Date(2026,3,1),new Date(2026,4,1),new Date(2026,5,1),new Date(2026,6,1),
+    new Date(2026,7,1),new Date(2026,8,1),new Date(2026,9,1),new Date(2026,10,1),
+    new Date(2026,11,1),new Date(2027,0,1),new Date(2027,1,1),new Date(2027,2,1),
+  ]
+  const MONTH_ENDS = MONTH_STARTS.map((_,i) => { const n=MONTH_STARTS[i+1]||new Date(2027,3,1); return new Date(n-1) })
+  const monthActive = (p,mi) => {
+    if(!p.fechaInicio||!p.fechaFin) return false
+    const s=new Date(fdStr(p.fechaInicio)), e=new Date(fdStr(p.fechaFin))
+    return s<=MONTH_ENDS[mi] && e>=MONTH_STARTS[mi]
+  }
+  const VF='#e8001c', SC='#1a5fe3'
+  const barCol = p => norm(p.desarrollo||'')==='sercom' ? SC : VF
+  const totalCapex = proyectos.reduce((s,p)=>s+(p.capex||0),0)
+  const ST_ES = { pending:'No iniciado', inprogress:'En curso', blocked:'En riesgo', done:'Completado' }
+  const ST_EN = { pending:'Not started', inprogress:'In progress', blocked:'At risk', done:'Completed' }
+  const stLabel = st => lang==='en'?(ST_EN[st]||st):(ST_ES[st]||st)
+  const stCol   = st => st==='done'?'#10b981':st==='inprogress'?'#3b82f6':st==='blocked'?'#f59e0b':'#94a3b8'
 
   const generar = async () => {
     setBusy(true); setTxt('')
@@ -1617,8 +1721,9 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
     try {
       const r = await callClaude({
         model:'claude-sonnet-4-6', max_tokens:1800,
-        system: fmt === 'email' ? SYSTEM_EJECUTIVO : SYSTEM_BULLETS,
-        messages:[{ role:'user', content:`Datos del OpsBoard semanal:\n${JSON.stringify(stats,null,2)}` }],
+        system: fmt==='email' ? SYSTEM_EJECUTIVO : SYSTEM_BULLETS,
+        messages:[{ role:'user', content:`Datos del OpsBoard semanal:
+${JSON.stringify(stats,null,2)}` }],
       })
       setTxt(r)
     } catch { setTxt('Error al generar.') }
@@ -1627,348 +1732,111 @@ Sin tecnicismos, orientado a impacto negocio, directo.`
 
   const copiar = () => { navigator.clipboard?.writeText(txt); setCopied(true); setTimeout(()=>setCopied(false),2000) }
 
+  const thSt = { padding:'7px 6px', borderBottom:`1px solid ${C.border}`, fontWeight:600, color:C.muted, fontSize:10, textAlign:'center', whiteSpace:'nowrap' }
+  const tdSt = { padding:'6px 6px', fontSize:11 }
+
   return (
-    <div style={{ paddingTop:16, maxWidth:800 }}>
-      <h2 style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>📋 Reporte Semanal</h2>
-      <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
-        <span style={{ fontSize:12, color:C.muted }}>Formato:</span>
-        {[{ id:'email', l:'📊 Ejecutivo dirección' },{ id:'bullets', l:'• Bullets standup' }].map(f => (
-          <button key={f.id} onClick={() => setFmt(f.id)}
-            style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:`1px solid ${C.border}`,
-              background:fmt===f.id?C.accent+'22':C.card, color:fmt===f.id?C.accent:C.muted, cursor:'pointer' }}>{f.l}</button>
-        ))}
-      </div>
-      <Btn onClick={generar} disabled={busy} style={{ marginBottom:20 }}>{busy?'⏳ Generando…':'📋 Generar reporte'}</Btn>
-      {txt && (
+    <div style={{ padding:'0 24px 32px' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16, flexWrap:'wrap' }}>
         <div>
-          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:22, marginBottom:12,
-            whiteSpace:'pre-wrap', fontSize:13, lineHeight:1.85, color:C.text, maxHeight:480, overflowY:'auto' }}>{txt}</div>
-          <div style={{ display:'flex', gap:8 }}>
-            <Btn v="sec" onClick={copiar}>{copied?'✓ Copiado':'📋 Copiar'}</Btn>
-            <Btn v="ghost" onClick={generar} disabled={busy}>↻ Regenerar</Btn>
+          <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:C.text }}>📋 Reporte Semanal</h2>
+          {totalCapex>0 && <p style={{ margin:'2px 0 0', fontSize:12, color:C.muted }}>FY2627 · CAPEX total: <strong style={{ color:C.text }}>{Number(totalCapex).toLocaleString('es')} €</strong></p>}
+        </div>
+        <div style={{ marginLeft:'auto', display:'flex', gap:6 }}>
+          {[{id:'tracking',l:'📊 Tracking'},{id:'ia',l:'🤖 Reporte IA'}].map(t => (
+            <button key={t.id} onClick={()=>setRpTab(t.id)} style={{ padding:'5px 14px', borderRadius:6, fontSize:12, fontWeight:600, border:`1px solid ${C.border}`, background:rpTab===t.id?C.accent:C.card, color:rpTab===t.id?'#fff':C.muted, cursor:'pointer' }}>{t.l}</button>
+          ))}
+        </div>
+      </div>
+
+      {rpTab==='tracking' && (
+        <div>
+          <div style={{ overflowX:'auto', borderRadius:8, border:`1px solid ${C.border}` }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+              <thead>
+                <tr style={{ background:C.surface }}>
+                  <th style={{ ...thSt, textAlign:'left', minWidth:170, padding:'7px 10px' }}>{lang==='en'?'Project':'Proyecto'}</th>
+                  <th style={thSt}>{lang==='en'?'Dev.':'Desarro.'}</th>
+                  <th style={{ ...thSt, minWidth:90 }}>{lang==='en'?'Phase':'Fase'}</th>
+                  <th style={{ ...thSt, minWidth:80 }}>{lang==='en'?'Status':'Estado'}</th>
+                  <th style={thSt}>%</th>
+                  <th style={{ ...thSt, minWidth:72 }}>{lang==='en'?'Start':'Inicio'}</th>
+                  <th style={{ ...thSt, minWidth:72 }}>{lang==='en'?'End':'Fin'}</th>
+                  <th style={{ ...thSt, minWidth:72 }}>CAPEX (€)</th>
+                  {MONTHS.map(m => <th key={m} style={{ ...thSt, minWidth:26, fontSize:8, padding:'4px 2px' }}>{m}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {proyectos.map((p,i) => {
+                  const pct  = p.status==='done'?100:fasePct(p.fase)
+                  const bc   = barCol(p)
+                  const nom  = lang==='en'&&p.nombreEN ? p.nombreEN : p.nombre
+                  const bg   = i%2===0?'transparent':C.surface+'55'
+                  return (
+                    <tr key={p.id||i} style={{ borderBottom:`0.5px solid ${C.border}`, background:bg }}>
+                      <td style={{ ...tdSt, padding:'6px 10px', fontWeight:500, color:C.text, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={nom}>{nom}</td>
+                      <td style={{ ...tdSt, textAlign:'center' }}>
+                        {p.desarrollo && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:bc+'22', color:bc }}>{p.desarrollo}</span>}
+                      </td>
+                      <td style={{ ...tdSt, color:C.muted, whiteSpace:'nowrap', textAlign:'center' }}>{lang==='en'?faseLabel(p.fase,'en'):(p.fase||'—')}</td>
+                      <td style={{ ...tdSt, textAlign:'center' }}>
+                        <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:stCol(p.status)+'22', color:stCol(p.status) }}>{stLabel(p.status)}</span>
+                      </td>
+                      <td style={{ ...tdSt, textAlign:'center', fontWeight:700, color:C.accent }}>{pct?`${pct}%`:''}</td>
+                      <td style={{ ...tdSt, color:C.muted, whiteSpace:'nowrap', textAlign:'center' }}>{p.fechaInicio?fmtFecha(fdStr(p.fechaInicio)):''}</td>
+                      <td style={{ ...tdSt, color:p.fechaFin&&diasRestantes(fdStr(p.fechaFin))<0&&p.status!=='done'?'#e8001c':C.muted, whiteSpace:'nowrap', textAlign:'center' }}>{p.fechaFin?fmtFecha(fdStr(p.fechaFin)):''}</td>
+                      <td style={{ ...tdSt, textAlign:'right', fontWeight:600 }}>{p.capex?Number(p.capex).toLocaleString('es'):''}</td>
+                      {MONTH_STARTS.map((_,mi) => (
+                        <td key={mi} style={{ padding:'2px 1px' }}>
+                          {monthActive(p,mi) && <div style={{ height:12, borderRadius:2, background:bc+'55', border:`1px solid ${bc}88` }} />}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+                <tr style={{ borderTop:`2px solid ${C.border}`, background:C.surface }}>
+                  <td colSpan={7} style={{ padding:'7px 10px', fontWeight:700, color:C.text, fontSize:11 }}>TOTAL CAPEX</td>
+                  <td style={{ padding:'7px 6px', textAlign:'right', fontWeight:700, color:C.accent, fontSize:12 }}>{totalCapex?Number(totalCapex).toLocaleString('es'):'—'}</td>
+                  <td colSpan={12} />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:16, flexWrap:'wrap' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:C.muted }}>
+              <div style={{ width:14, height:8, background:VF+'55', border:`1px solid ${VF}`, borderRadius:2 }} /> Vodafone
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:C.muted }}>
+              <div style={{ width:14, height:8, background:SC+'55', border:`1px solid ${SC}`, borderRadius:2 }} /> Sercom
+            </div>
+            <button onClick={()=>window.print()} style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:6, fontSize:11, background:'none', border:`1px solid ${C.border}`, color:C.muted, cursor:'pointer' }}>🖨 Imprimir</button>
           </div>
         </div>
       )}
-    </div>
-  )
-}
 
-// ── Nuevo Tema modal ──────────────────────────────────────────────────────────
-const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
-  const [tema,   setTema]   = useState('')
-  const [obj,    setObj]    = useState('')
-  const [cat,    setCat]    = useState('projects')
-  const [prop,   setProp]   = useState('')
-  const [prio,   setPrio]   = useState('')
-  const [fecha,  setFecha]  = useState('')
-  const [proy,   setProy]   = useState('')
-  const [status, setStatus] = useState('pending')
-
-  const inputSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
-
-  const statusOpts = ST.map(s => ({ v:s.id, l:s.label }))
-
-  const guardar = () => {
-    if (!tema.trim()) return
-    onAdd({
-      id: uid(), tema: tema.trim(), objetivo: obj.trim(),
-      category: cat, propietario: prop.trim(),
-      prioridad: prio, risk: mapRisk(prio),
-      status, estadoSheet: ST.find(s=>s.id===status)?.label || 'No iniciado',
-      fechaInicio: null, fechaFin: fecha || null,
-      proyecto: proy.trim(),
-      archivos: '', notas: 'Creado manualmente en OpsBoard',
-      subtareas: [], _local: true,
-    })
-    onClose()
-  }
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-      onClick={e => e.target===e.currentTarget&&onClose()}>
-      <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:580, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-        <div style={{ padding:'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:28, height:28, borderRadius:6, background:C.accent+'22', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke={C.accent} strokeWidth="2" strokeLinecap="round"/></svg>
-          </div>
-          <h3 style={{ flex:1, fontSize:15, fontWeight:700, color:C.text }}>Nuevo tema</h3>
-          <button onClick={onClose} aria-label="Cerrar" style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18, lineHeight:1 }}>✕</button>
-        </div>
-        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12 }}>
-          <div>
-            <Lbl>Tema *</Lbl>
-            <input value={tema} onChange={e=>setTema(e.target.value)} placeholder="Nombre del tema…"
-              style={inputSt} autoFocus onKeyDown={e=>e.key==='Enter'&&guardar()} />
-          </div>
-          <div>
-            <Lbl>Objetivo</Lbl>
-            <TA value={obj} onChange={setObj} placeholder="Qué se quiere conseguir con este tema…" rows={2} />
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            <div>
-              <Lbl>Categoría</Lbl>
-              <Sel value={cat} onChange={setCat} opts={CATS.map(c=>({v:c.id,l:c.label}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <Lbl>Prioridad</Lbl>
-              <Sel value={prio} onChange={setPrio} opts={PRIORIDADES.map(p=>({v:p,l:p||'Sin prioridad'}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <Lbl>Estado inicial</Lbl>
-              <Sel value={status} onChange={setStatus} opts={statusOpts} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <Lbl>Fecha fin</Lbl>
-              <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
-                style={{ ...inputSt, colorScheme:'light' }} />
-            </div>
-            <div style={{ gridColumn:'1 / -1' }}>
-              <Lbl>Propietario</Lbl>
-              <input list="owners-list-nuevo" value={prop} onChange={e=>setProp(e.target.value)}
-                placeholder="Nombre del responsable…" style={inputSt} />
-              <datalist id="owners-list-nuevo">
-                {KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}
-              </datalist>
-            </div>
-          </div>
-          <div>
-            <Lbl>Proyecto (opcional)</Lbl>
-            <input list="proyectos-list-nuevo" value={proy} onChange={e=>setProy(e.target.value)}
-              placeholder="Nombre exacto del proyecto al que pertenece…" style={inputSt} />
-            <datalist id="proyectos-list-nuevo">
-              {proyectoNames.map(n=><option key={n} value={n}/>)}
-            </datalist>
-            <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Debe coincidir con un proyecto existente en el Sheet para vincularse correctamente.</div>
-          </div>
-        </div>
-        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end', gap:8 }}>
-          <Btn v="sec" onClick={onClose}>Cancelar</Btn>
-          <Btn onClick={guardar} disabled={!tema.trim()}>Crear tema</Btn>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Modal item ────────────────────────────────────────────────────────────────
-const KNOWN_OWNERS = [
-  'Juan Rodriguez Peisel','Francisco Toledo','Nacho Cruz','Maria Garcia',
-]
-const PRIORIDADES = ['','P0','P1','P2','P3']
-
-const ModalItem = ({ item, onClose, onItemChange, proyectoNames = [], onToast }) => {
-  const [newSt,    setNewSt]    = useState(item.status)
-  const [newProp,  setNewProp]  = useState(item.propietario || '')
-  const [newPrio,  setNewPrio]  = useState(item.prioridad  || '')
-  const [newFecha, setNewFecha] = useState(fdStr(item.fechaFin) || '')
-  const [newProy,  setNewProy]  = useState(item.proyecto   || '')
-  const [nc,          setNc]          = useState('')
-  const [saving,      setSaving]      = useState(false)
-  const [newSubTitle, setNewSubTitle] = useState('')
-  const [newSubSt,    setNewSubSt]    = useState('pending')
-
-  useEffect(() => {
-    const h = e => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', h)
-    return () => document.removeEventListener('keydown', h)
-  }, [])
-
-  const cat           = CATS.find(c => c.id === item.category)
-  const localComments = getComments(norm(item.tema))
-
-  const hasChanges =
-    newSt    !== item.status            ||
-    newProp  !== (item.propietario||'') ||
-    newPrio  !== (item.prioridad||'')   ||
-    newFecha !== (fdStr(item.fechaFin)||'') ||
-    newProy  !== (item.proyecto||'')
-
-  const guardar = async () => {
-    if (!hasChanges) { onClose(); return }
-    setSaving(true)
-    const fields    = {}
-    const apiFields = {}
-    if (newSt !== item.status) {
-      fields.status = newSt; fields.estadoSheet = ST_TO_SHEET[newSt]
-      apiFields.estado = ST_TO_SHEET[newSt]
-    }
-    if (newProp !== (item.propietario||'')) { fields.propietario = newProp; apiFields.propietario = newProp }
-    if (newPrio !== (item.prioridad||''))   { fields.prioridad = newPrio; fields.risk = mapRisk(newPrio); apiFields.prioridad = newPrio }
-    if (newFecha !== (fdStr(item.fechaFin)||'')) { fields.fechaFin = newFecha || null; if (newFecha) apiFields.fechaFin = newFecha }
-    if (newProy !== (item.proyecto||''))    { fields.proyecto = newProy; apiFields.proyecto = newProy }
-    if (Object.keys(apiFields).length > 0) {
-      try { await apiUpdate(item.tema, apiFields) } catch {}
-    }
-    saveOverride(norm(item.tema), fields)
-    onItemChange(item.id, fields)
-    setSaving(false); onToast?.('Cambios guardados'); onClose()
-  }
-
-  const guardarComentario = async () => {
-    const text = nc.trim()
-    if (!text) return
-    setSaving(true)
-    const c = saveComment(norm(item.tema), text)
-    try { await apiUpdate(item.tema, { notas: `[${c.ts}] ${text}` }) } catch {}
-    setNc(''); setSaving(false); onToast?.('Actualización guardada')
-  }
-
-  const addSubtarea = () => {
-    if (!newSubTitle.trim()) return
-    const sub     = { id: uid(), title: newSubTitle.trim(), prop: '', status: newSubSt, risk: 'green', fechaFin: null, notas: '' }
-    const updated = [...(item.subtareasLocal || []), sub]
-    saveOverride(norm(item.tema), { subtareasLocal: updated })
-    onItemChange(item.id, { subtareasLocal: updated }, true)
-    setNewSubTitle('')
-  }
-
-  const inputSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-      onClick={e => e.target===e.currentTarget&&onClose()}>
-      <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:680, maxHeight:'92vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
-
-        {/* Header */}
-        <div style={{ padding:'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:3, height:22, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
-          <h3 style={{ flex:1, fontSize:15, fontWeight:700, color:C.text, lineHeight:1.3 }}>{item.tema}</h3>
-          {hasChanges && <span style={{ fontSize:10, color:'#fbbf24', background:'#fbbf2422', padding:'2px 8px', borderRadius:4, fontWeight:700 }}>● Sin guardar</span>}
-          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18 }}>✕</button>
-        </div>
-
-        <div style={{ flex:1, overflowY:'auto', padding:18 }}>
-
-          {/* Editable fields grid */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
-            <div><Lbl>Área</Lbl><Tag id={item.category} type="cat" /></div>
-
-            <div>
-              <Lbl>Estado</Lbl>
-              <Sel value={newSt} onChange={setNewSt} opts={ST.map(s=>({v:s.id,l:s.label}))} style={{ width:'100%' }} />
-            </div>
-
-            <div>
-              <Lbl>Propietario</Lbl>
-              <input list="owners-list" value={newProp} onChange={e=>setNewProp(e.target.value)}
-                placeholder="Nombre…" style={inputSt} />
-              <datalist id="owners-list">
-                {KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}
-              </datalist>
-            </div>
-
-            <div>
-              <Lbl>Prioridad</Lbl>
-              <Sel value={newPrio} onChange={setNewPrio}
-                opts={PRIORIDADES.map(p=>({v:p,l:p||'Sin prioridad'}))}
-                style={{ width:'100%' }} />
-            </div>
-
-            <div>
-              <Lbl>Fecha inicio</Lbl>
-              <span style={{ fontSize:13, color:C.text }}>{fmtFecha(fdStr(item.fechaInicio))}</span>
-            </div>
-
-            <div>
-              <Lbl>Fecha fin</Lbl>
-              <input type="date" value={newFecha} onChange={e=>setNewFecha(e.target.value)}
-                style={{ ...inputSt, colorScheme:'light' }} />
-            </div>
-
-            <div style={{ gridColumn:'1/-1' }}>
-              <Lbl>Proyecto</Lbl>
-              <input list="proyectos-list-modal" value={newProy} onChange={e=>setNewProy(e.target.value)}
-                placeholder="Nombre del proyecto al que pertenece (opcional)…"
-                style={inputSt} />
-              <datalist id="proyectos-list-modal">
-                {proyectoNames.map(n=><option key={n} value={n}/>)}
-              </datalist>
-            </div>
-          </div>
-
-          {/* Objetivo */}
-          {item.objetivo && (
-            <div style={{ marginBottom:16 }}>
-              <Lbl>Objetivo</Lbl>
-              <p style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>{item.objetivo}</p>
-            </div>
-          )}
-
-          {/* Subtareas */}
-          {(() => {
-            const allSubItems = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
-            const doneN       = allSubItems.filter(s=>s.status==='done').length
-            const fromSheet   = (item.subtareas||[]).length
-            return (
-              <div style={{ marginBottom:16 }}>
-                <Lbl>Subtareas ({doneN}/{allSubItems.length})</Lbl>
-                {allSubItems.map((st,i) => {
-                  const sc      = ST.find(s=>s.id===st.status)||ST[0]
-                  const isLocal = i >= fromSheet
-                  return (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, borderRadius:6, padding:'7px 10px', marginBottom:5, border:`1px solid ${isLocal?C.accent+'44':C.border}` }}>
-                      <div style={{ width:8, height:8, borderRadius:'50%', background:RK.find(r=>r.id===st.risk)?.color||'#64748b', flexShrink:0 }} />
-                      <span style={{ flex:1, fontSize:12, color:st.status==='done'?C.muted:C.text, textDecoration:st.status==='done'?'line-through':'none' }}>{st.title}</span>
-                      {isLocal && <span style={{ fontSize:9, color:C.accent, background:C.accent+'22', padding:'1px 5px', borderRadius:3, flexShrink:0 }}>local</span>}
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, background:sc.color+'22', color:sc.color, flexShrink:0 }}>{sc.label}</span>
-                    </div>
-                  )
-                })}
-                {/* Nueva subtarea */}
-                <div style={{ display:'flex', gap:6, marginTop:8, alignItems:'center' }}>
-                  <input value={newSubTitle} onChange={e=>setNewSubTitle(e.target.value)}
-                    placeholder="Nueva subtarea…"
-                    onKeyDown={e=>e.key==='Enter'&&addSubtarea()}
-                    style={{ flex:1, background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px 9px', fontSize:12, outline:'none' }} />
-                  <Sel value={newSubSt} onChange={setNewSubSt} opts={ST.map(s=>({v:s.id,l:s.label}))}
-                    style={{ fontSize:11, padding:'5px 8px' }} />
-                  <Btn onClick={addSubtarea} disabled={!newSubTitle.trim()} style={{ padding:'5px 10px', fontSize:12 }}>+ Añadir</Btn>
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* Comentarios */}
-          <div style={{ marginBottom:16 }}>
-            <Lbl>Actualizaciones</Lbl>
-            {localComments.map(c => (
-              <div key={c.id} style={{ display:'flex', gap:10, padding:'9px 12px', background:C.card, borderRadius:6, marginBottom:5, borderLeft:`3px solid ${C.accent}` }}>
-                <div>
-                  <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}><span style={{ fontWeight:700, color:C.accent }}>[{c.ts}]</span></div>
-                  <div style={{ fontSize:13, color:C.text, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{c.text}</div>
-                </div>
-              </div>
+      {rpTab==='ia' && (
+        <div style={{ maxWidth:800 }}>
+          <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
+            <span style={{ fontSize:12, color:C.muted }}>Formato:</span>
+            {[{ id:'email', l:'📊 Ejecutivo dirección' },{ id:'bullets', l:'• Bullets standup' }].map(f => (
+              <button key={f.id} onClick={() => setFmt(f.id)}
+                style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:`1px solid ${C.border}`,
+                  background:fmt===f.id?C.accent+'22':C.card, color:fmt===f.id?C.accent:C.muted, cursor:'pointer' }}>{f.l}</button>
             ))}
-            <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:localComments.length>0?10:0 }}>
-              <TA value={nc} onChange={setNc} placeholder="Escribe una actualización…" rows={2}
-                onKeyDown={e=>{ if(e.ctrlKey&&e.key==='Enter'){ guardarComentario(); e.preventDefault() } }} />
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <Btn onClick={guardarComentario} disabled={saving||!nc.trim()} style={{ padding:'6px 14px', fontSize:12 }}>💬 Guardar</Btn>
-                <span style={{ fontSize:11, color:C.muted }}>Ctrl+Enter</span>
-              </div>
-            </div>
           </div>
-
-          {/* Notas del sheet */}
-          {item.notas && (
+          <Btn onClick={generar} disabled={busy} style={{ marginBottom:20 }}>{busy?'⏳ Generando…':'📋 Generar reporte'}</Btn>
+          {txt && (
             <div>
-              <Lbl>Notas de Seguimiento</Lbl>
-              <div style={{ fontSize:12, color:C.muted, lineHeight:1.6, background:C.card, borderRadius:8, padding:12, maxHeight:200, overflowY:'auto', borderLeft:`3px solid ${C.border}`, whiteSpace:'pre-wrap' }}>
-                {item.notas}
+              <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:22, marginBottom:12,
+                whiteSpace:'pre-wrap', fontSize:13, lineHeight:1.85, color:C.text, maxHeight:480, overflowY:'auto' }}>{txt}</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <Btn v="sec" onClick={copiar}>{copied?'✓ Copiado':'📋 Copiar'}</Btn>
+                <Btn v="ghost" onClick={generar} disabled={busy}>↻ Regenerar</Btn>
               </div>
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span style={{ fontSize:11, color:C.muted }}>Sheet: <b style={{ color:C.text }}>{item.estadoSheet}</b> · {[...(item.subtareas||[]), ...(item.subtareasLocal||[])].length} subtareas</span>
-          <div style={{ display:'flex', gap:8 }}>
-            <Btn v="sec" onClick={onClose}>Cancelar</Btn>
-            <Btn onClick={guardar} disabled={saving||!hasChanges}>{saving?'⏳ Guardando…':'💾 Guardar cambios'}</Btn>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -2056,6 +1924,7 @@ const Historico = ({ items }) => {
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function OpsBoard() {
   const [vista,       setVista]      = useState('Dashboard')
+  const [lang,        setLang]       = useState('es')
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
   const [proyectos,   setProyectos]  = useState([])
@@ -2140,6 +2009,11 @@ export default function OpsBoard() {
             ))}
           </nav>
           <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+            <div style={{ display:'flex', border:`1px solid ${C.border}`, borderRadius:6, overflow:'hidden' }}>
+              {['es','en'].map(l => (
+                <button key={l} onClick={()=>setLang(l)} style={{ padding:'3px 9px', background:lang===l?C.accent:'none', color:lang===l?'#fff':C.muted, border:'none', cursor:'pointer', fontWeight:lang===l?700:400, textTransform:'uppercase', fontSize:10, lineHeight:1 }}>{l}</button>
+              ))}
+            </div>
             {lastUpd && <span style={{ fontSize:11, color:C.muted }}>{pad(lastUpd.getHours())}:{pad(lastUpd.getMinutes())}</span>}
             <button onClick={loadData} disabled={loading}
               style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer' }}>
@@ -2172,11 +2046,11 @@ export default function OpsBoard() {
                 owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                 onNuevo={() => setShowNuevo(true)} />
             )}
-            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} />}
+            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
             {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
             {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
             {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
-            {vista === '📋 Reporte Semanal' && <Reporte items={allItems} />}
+            {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
             {vista === '⧆ Histórico'        && <Historico items={allItems} />}
           </>
         )}
