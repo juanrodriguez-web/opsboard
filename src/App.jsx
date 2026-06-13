@@ -44,6 +44,18 @@ const OWN_COLORS = {
 }
 const ownerColor = name => OWN_COLORS[norm(name || '')] || '#64748b'
 
+// Priority color mapping
+const PRI_COLORS = {
+  P0: { bg:'#fef2f2', color:'#dc2626' },
+  P1: { bg:'#fff7ed', color:'#c2410c' },
+  P2: { bg:'#fffbeb', color:'#b45309' },
+  P3: { bg:'#f0fdf4', color:'#15803d' },
+}
+const priColor = p => PRI_COLORS[p] || { bg:C.surface, color:C.muted }
+
+// WIP limits per column (null = no limit)
+const WIP_LIMITS = { pending:null, inprogress:8, blocked:null, done:null }
+
 // CVM campaign helpers
 const TIPO_COLORS = {
   'oferta one shot':'#d97706', 'oferta':'#d97706',
@@ -202,116 +214,253 @@ const Toast = ({ msg, type = 'success', onHide }) => {
 
 // ── Tarjeta ──────────────────────────────────────────────────────────────────
 const Tarjeta = ({ item, onClick, onNextSt }) => {
-  const cat      = CATS.find(c => c.id === item.category)
-  const nextIdx  = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
-  const nextId   = ST[nextIdx].id
-  const nextSt   = ST[nextIdx]
-  const allSubs  = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
-  const stOk     = allSubs.filter(s => s.status === 'done').length
-  const stTot    = allSubs.length
-  const dl       = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
-  const oc       = ownerColor(item.propietario)
+  const cat        = CATS.find(c => c.id === item.category)
+  const nextIdx    = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
+  const nextId     = ST[nextIdx].id
+  const nextSt     = ST[nextIdx]
+  const allSubs    = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
+  const stOk       = allSubs.filter(s => s.status === 'done').length
+  const stTot      = allSubs.length
+  const dl         = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
+  const oc         = ownerColor(item.propietario)
+  const isOverdue  = dl !== null && dl < 0
+  const isBlocked  = item.status === 'blocked'
+  const isDone     = item.status === 'done'
+  const leftColor  = isBlocked ? '#e11d48' : isOverdue ? '#dc2626' : cat?.color || C.muted
+  const pc         = priColor(item.prioridad)
+
   return (
     <div onClick={() => onClick(item)}
-      style={{ background:C.card, borderRadius:8, padding:12, marginBottom:8,
-        border:`1px solid ${dl!==null&&dl<0?'#f43f5e55':C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, cursor:'pointer',
-        transition:'box-shadow 150ms ease-out' }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'}
+      style={{
+        background: C.card, borderRadius:8, padding:'10px 12px', marginBottom:8,
+        border:`1px solid ${(isOverdue||isBlocked) ? leftColor+'44' : C.border}`,
+        borderLeft:`3px solid ${leftColor}`,
+        cursor:'pointer', opacity: isDone ? 0.72 : 1,
+        transition:'box-shadow 150ms ease-out',
+      }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow='0 3px 12px rgba(0,0,0,.09)'}
       onMouseLeave={e => e.currentTarget.style.boxShadow='none'}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:6 }}>
-        <Dot risk={item.risk} />
-        <span style={{ flex:1, fontSize:13, fontWeight:600, color:C.text, lineHeight:1.35 }}>{item.tema}</span>
-        {item._hasLocal && <span title="Cambios locales pendientes de sincronización" style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, flexShrink:0, cursor:'help', fontWeight:700 }}>~local</span>}
+
+      {/* Row 1: title + priority badge */}
+      <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:5 }}>
+        <span style={{ flex:1, fontSize:12, fontWeight:600, color:isDone?C.muted:C.text, lineHeight:1.35, textDecoration:isDone?'line-through':'none' }}>{item.tema}</span>
+        <div style={{ display:'flex', gap:3, flexShrink:0, alignItems:'center' }}>
+          {item._hasLocal && <span title="Cambios locales pendientes de sincronización" style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, cursor:'help', fontWeight:700 }}>~local</span>}
+          {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color, flexShrink:0 }}>{item.prioridad}</span>}
+        </div>
       </div>
-      {item.objetivo && <p style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{item.objetivo}</p>}
+
+      {/* Row 2: category tag + project tag */}
+      {(cat || item.proyecto) && (
+        <div style={{ display:'flex', gap:4, marginBottom:6, flexWrap:'wrap', alignItems:'center' }}>
+          {cat && <span style={{ fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:10, background:cat.bg, color:cat.color }}>{cat.label}</span>}
+          {item.proyecto && <span style={{ fontSize:9, padding:'2px 6px', borderRadius:10, background:C.surface, color:C.muted, border:`1px solid ${C.border}`, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.proyecto}</span>}
+        </div>
+      )}
+
+      {/* Row 3: owner + date + subtasks count + → button */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, flexWrap:'wrap' }}>
-          <div style={{ width:20, height:20, borderRadius:'50%', background:oc+'28', border:`1.5px solid ${oc}66`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:oc, fontFamily:'monospace', flexShrink:0 }} title={item.propietario||'Sin propietario'}>{iniciales(item.propietario)}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:20, height:20, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, fontWeight:700, color:'#fff', flexShrink:0 }} title={item.propietario||'Sin propietario'}>{iniciales(item.propietario)}</div>
           <AlertFecha endDate={item.fechaFin} status={item.status} />
-          {item.prioridad && <span style={{ fontSize:10, fontWeight:700, padding:'1px 5px', borderRadius:3, background:RK.find(r=>r.id===item.risk)?.color+'22', color:RK.find(r=>r.id===item.risk)?.color }}>{item.prioridad}</span>}
+          {stTot > 0 && <span style={{ fontSize:10, color:C.muted }}>{stOk}/{stTot}</span>}
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-          {stTot > 0 && <span style={{ fontSize:11, color:C.muted }}>{stOk}/{stTot}</span>}
-          <button
-            title={`Cambiar a: ${nextSt.label}`}
-            aria-label={`Cambiar estado a ${nextSt.label}`}
-            onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
-            style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 8px', fontSize:11, cursor:'pointer', color:C.muted, transition:'all 130ms ease-out', fontWeight:600, lineHeight:1 }}
-            onMouseEnter={e => { e.currentTarget.style.background=nextSt.color+'22'; e.currentTarget.style.color=nextSt.color; e.currentTarget.style.borderColor=nextSt.color+'55' }}
-            onMouseLeave={e => { e.currentTarget.style.background=C.surface; e.currentTarget.style.color=C.muted; e.currentTarget.style.borderColor=C.border }}>
-            →
-          </button>
-        </div>
+        <button
+          title={`Cambiar a: ${nextSt.label}`}
+          aria-label={`Cambiar estado a ${nextSt.label}`}
+          onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
+          style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 8px', fontSize:11, cursor:'pointer', color:C.muted, transition:'all 130ms ease-out', fontWeight:600, lineHeight:1 }}
+          onMouseEnter={e => { e.currentTarget.style.background=nextSt.color+'22'; e.currentTarget.style.color=nextSt.color; e.currentTarget.style.borderColor=nextSt.color+'55' }}
+          onMouseLeave={e => { e.currentTarget.style.background=C.surface; e.currentTarget.style.color=C.muted; e.currentTarget.style.borderColor=C.border }}>
+          →
+        </button>
       </div>
+    </div>
+  )
+}
+
+// ── Tablero KPI Strip ────────────────────────────────────────────────────────
+const TableroKPIStrip = ({ items }) => {
+  const total      = items.length
+  const done       = items.filter(i => i.status === 'done').length
+  const inprogress = items.filter(i => i.status === 'inprogress').length
+  const blocked    = items.filter(i => i.status === 'blocked').length
+  const overdue    = items.filter(i => i.fechaFin && i.status !== 'done' && diasRestantes(fdStr(i.fechaFin)) < 0).length
+  const next7      = items.filter(i => { const d = i.fechaFin && i.status !== 'done' ? diasRestantes(fdStr(i.fechaFin)) : null; return d !== null && d >= 0 && d <= 7 }).length
+  const pct        = total > 0 ? Math.round(done / total * 100) : 0
+
+  const kpis = [
+    { l:'Total',        v:total,        sub:'temas activos',   cls:'neutral',                     icon:null },
+    { l:'Completado',   v:`${pct}%`,    sub:`${done} temas`,   cls:'ok',                          icon:'✓' },
+    { l:'En curso',     v:inprogress,   sub:'en progreso',      cls:'neutral',                    icon:null },
+    { l:'Bloqueados',   v:blocked,      sub:'requieren acción', cls:blocked>0?'warn':'neutral',   icon:blocked>0?'⚠':'null' },
+    { l:'Vencidos',     v:overdue,      sub:'fuera de fecha',   cls:overdue>0?'alert':'neutral',  icon:overdue>0?'⚑':null },
+    { l:'Próx. 7 días', v:next7,        sub:'fechas límite',    cls:'neutral',                    icon:null },
+  ]
+  const clsStyle = cls => ({
+    alert:   { bg:'#fef2f2', border:'#fecaca', val:'#dc2626', sub:'#dc262688' },
+    warn:    { bg:'#fffbeb', border:'#fde68a', val:'#d97706', sub:'#d9770688' },
+    ok:      { bg:'#f0fdf4', border:'#bbf7d0', val:'#16a34a', sub:'#16a34a88' },
+    neutral: { bg:C.surface, border:C.border, val:C.text,    sub:C.muted },
+  }[cls] || { bg:C.surface, border:C.border, val:C.text, sub:C.muted })
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:8, marginBottom:14, marginTop:2 }}>
+      {kpis.map((k, i) => {
+        const s = clsStyle(k.cls)
+        return (
+          <div key={i} style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:8, padding:'10px 12px' }}>
+            <div style={{ fontSize:10, color:s.sub, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:3, fontWeight:600 }}>{k.l}</div>
+            <div style={{ fontSize:20, fontWeight:700, color:s.val, lineHeight:1 }}>{k.v}</div>
+            <div style={{ fontSize:10, color:s.sub, marginTop:3 }}>{k.sub}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
 // ── Tablero ──────────────────────────────────────────────────────────────────
 const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo }) => {
-  const [search, setSearch] = useState('')
+  const [search,      setSearch]      = useState('')
+  const [priF,        setPriF]        = useState('all')
+  const [alertasOnly, setAlertasOnly] = useState(false)
   const w = useW()
   const kanbanCols = w >= 1024 ? 'repeat(4,1fr)' : w >= 640 ? 'repeat(2,1fr)' : 'repeat(1,1fr)'
+
   const f = items
     .filter(i => catF==='all'||i.category===catF)
     .filter(i => asF==='all'||norm(i.propietario)===norm(asF))
+    .filter(i => priF==='all'||i.prioridad===priF)
+    .filter(i => !alertasOnly || i.status==='blocked' || (i.fechaFin && i.status!=='done' && diasRestantes(fdStr(i.fechaFin)) < 0))
     .filter(i => !search.trim() || norm(i.tema + ' ' + (i.objetivo||'')).includes(norm(search)))
+
+  const toggleAlertas = () => {
+    setAlertasOnly(p => !p)
+    if (!alertasOnly) { setCatF('all'); setAsF('all'); setPriF('all') }
+  }
+
+  const hasFilters = catF!=='all'||asF!=='all'||priF!=='all'||alertasOnly||search.trim()
+
   return (
     <div>
-      <div style={{ display:'flex', gap:8, paddingTop:16, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
+      {/* ── KPI strip ── */}
+      <TableroKPIStrip items={items} />
+
+      {/* ── Filter bar ── */}
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:'8px 12px', marginBottom:12, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+
+        {/* Search */}
+        <div style={{ display:'flex', alignItems:'center', gap:6, background:C.surface, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px 10px', flex:1, minWidth:160 }}>
+          <span style={{ color:C.muted, fontSize:13 }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar tema…"
+            style={{ border:'none', background:'none', fontSize:12, color:C.text, outline:'none', width:'100%' }} />
+          {search && <button onClick={() => setSearch('')} style={{ border:'none', background:'none', color:C.muted, cursor:'pointer', fontSize:12 }}>✕</button>}
+        </div>
+
+        {/* Category chips */}
         {[{ id:'all', label:'Todas', color:C.muted }, ...CATS].map(c => {
           const n  = c.id === 'all' ? items.length : items.filter(i => i.category === c.id).length
-          const on = catF === c.id
+          const on = catF === c.id && !alertasOnly
           return (
-            <button key={c.id} onClick={() => setCatF(c.id)}
-              style={{ padding:'5px 12px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer',
+            <button key={c.id} onClick={() => { setCatF(c.id); setAlertasOnly(false) }}
+              style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer',
                 border:on?`1px solid ${c.color}55`:`1px solid ${C.border}`,
-                background:on?c.color+'22':C.card, color:on?c.color:C.muted }}>
-              {c.label} ({n})
+                background:on?c.color+'22':C.card, color:on?c.color:C.muted, whiteSpace:'nowrap' }}>
+              {c.label} <span style={{ opacity:.65 }}>{n}</span>
             </button>
           )
         })}
-        <div style={{ width:1, height:20, background:C.border }} />
-        <select value={asF} onChange={e => setAsF(e.target.value)}
-          style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:20, padding:'5px 12px', fontSize:12, cursor:'pointer', outline:'none' }}>
-          <option value="all">Todos</option>
-          {owners.map(o => <option key={o} value={o}>{o.split(' ')[0]}</option>)}
-        </select>
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Buscar tema…"
-          style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:20, padding:'5px 14px', fontSize:12, outline:'none', minWidth:160 }} />
-        <div style={{ display:'flex', gap:4, marginLeft:'auto', alignItems:'center' }}>
-          <button onClick={onNuevo}
-            style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:700, border:`1px solid ${C.accent}55`,
-              background:C.accent+'22', color:C.accent, cursor:'pointer' }}>
-            ➕ Nuevo tema
-          </button>
+
+        {/* Separator */}
+        <div style={{ width:1, height:18, background:C.border, flexShrink:0 }} />
+
+        {/* Alertas quick filter */}
+        <button onClick={toggleAlertas}
+          style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer',
+            border:alertasOnly?`1px solid #e11d4877`:`1px solid ${C.border}`,
+            background:alertasOnly?'#fef2f2':C.card, color:alertasOnly?'#e11d48':C.muted, whiteSpace:'nowrap' }}>
+          ⚠ Alertas {alertasOnly && <span style={{ opacity:.65 }}>{f.length}</span>}
+        </button>
+
+        {/* Right: owner + priority + views + new */}
+        <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+          <select value={asF} onChange={e => setAsF(e.target.value)} aria-label="Filtrar por responsable"
+            style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'4px 8px', fontSize:11, cursor:'pointer', outline:'none' }}>
+            <option value="all">Todos los responsables</option>
+            {owners.map(o => <option key={o} value={o}>{o.split(' ')[0]}</option>)}
+          </select>
+          <select value={priF} onChange={e => setPriF(e.target.value)} aria-label="Filtrar por prioridad"
+            style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'4px 8px', fontSize:11, cursor:'pointer', outline:'none' }}>
+            <option value="all">Todas las prioridades</option>
+            {['P0','P1','P2','P3'].map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {hasFilters && (
+            <button onClick={() => { setCatF('all'); setAsF('all'); setPriF('all'); setSearch(''); setAlertasOnly(false) }}
+              style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:6, padding:'4px 8px', fontSize:11, color:C.muted, cursor:'pointer' }}>
+              ✕ Limpiar
+            </button>
+          )}
           <div style={{ width:1, height:18, background:C.border }} />
-          {[{ id:'kanban', l:'⊞ Kanban' }, { id:'list', l:'☰ Lista' }].map(v => (
-            <button key={v.id} onClick={() => setModo(v.id)}
-              style={{ padding:'5px 10px', borderRadius:6, fontSize:12, border:`1px solid ${C.border}`,
+          {[{ id:'kanban', l:'⊞' }, { id:'list', l:'☰' }].map(v => (
+            <button key={v.id} onClick={() => setModo(v.id)} title={v.id==='kanban'?'Vista Kanban':'Vista Lista'}
+              style={{ padding:'4px 8px', borderRadius:6, fontSize:13, border:`1px solid ${C.border}`,
                 background:modo===v.id?C.accent+'22':C.card, color:modo===v.id?C.accent:C.muted, cursor:'pointer' }}>{v.l}</button>
           ))}
+          <button onClick={onNuevo}
+            style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:700, border:`1px solid ${C.accent}55`,
+              background:C.accent, color:'#fff', cursor:'pointer' }}>
+            + Nuevo tema
+          </button>
         </div>
       </div>
-      {f.length === 0 && search.trim() && (
+
+      {/* ── Empty state ── */}
+      {f.length === 0 && (
         <div style={{ textAlign:'center', color:C.muted, padding:'40px 0', fontSize:13 }}>
-          Sin resultados para "<b style={{ color:C.text }}>{search}</b>"
-          <button onClick={() => setSearch('')} style={{ marginLeft:10, background:'none', border:'none', color:C.accent, cursor:'pointer', fontSize:12 }}>Limpiar</button>
+          {search.trim()
+            ? <>Sin resultados para "<b style={{ color:C.text }}>{search}</b>"</>
+            : alertasOnly
+              ? 'Sin alertas activas. ¡Todo en orden!'
+              : 'Sin temas con estos filtros'}
+          <button onClick={() => { setCatF('all'); setAsF('all'); setPriF('all'); setSearch(''); setAlertasOnly(false) }}
+            style={{ marginLeft:10, background:'none', border:'none', color:C.accent, cursor:'pointer', fontSize:12 }}>
+            Limpiar filtros
+          </button>
         </div>
       )}
-      {modo === 'kanban' ? (
+
+      {/* ── Kanban view ── */}
+      {modo === 'kanban' && f.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:kanbanCols, gap:14 }}>
           {ST.map(st => {
-            const col = f.filter(i => i.status === st.id)
+            const col      = f.filter(i => i.status === st.id)
+            const limit    = WIP_LIMITS[st.id]
+            const overLimit = limit && col.length > limit
             return (
               <div key={st.id}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
-                  <div style={{ width:7, height:7, borderRadius:'50%', background:st.color }} />
-                  <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'.08em' }}>{st.label}</span>
-                  <span style={{ fontSize:10, color:st.color, background:st.color+'22', borderRadius:10, padding:'1px 6px' }}>{col.length}</span>
+                {/* Column header */}
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                  <div style={{ width:7, height:7, borderRadius:'50%', background:st.color, flexShrink:0 }} />
+                  <span style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'.08em', flex:1 }}>{st.label}</span>
+                  <span style={{
+                    fontSize:10, padding:'2px 7px', borderRadius:10, fontWeight:600,
+                    background: overLimit ? '#fef2f2' : st.color+'22',
+                    color:      overLimit ? '#dc2626' : st.color,
+                    border:     `1px solid ${overLimit ? '#fca5a5' : st.color+'44'}`,
+                  }}>
+                    {col.length}{limit ? ` / ${limit}` : ''}
+                  </span>
                 </div>
+
+                {/* WIP over-limit alert */}
+                {overLimit && (
+                  <div style={{ fontSize:10, color:'#dc2626', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:5, padding:'5px 8px', marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
+                    ⚠ WIP superado — mueve o bloquea temas
+                  </div>
+                )}
+
+                {/* Cards */}
                 <div style={{ minHeight:60 }}>
                   {col.length === 0
                     ? <div style={{ border:`2px dashed ${C.border}`, borderRadius:8, padding:'18px 12px', textAlign:'center', color:C.muted, fontSize:11 }}>Vacío</div>
@@ -321,35 +470,42 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
             )
           })}
         </div>
-      ) : (
+      )}
+
+      {/* ── List view ── */}
+      {modo === 'list' && f.length > 0 && (
         <div style={{ background:C.card, borderRadius:10, border:`1px solid ${C.border}`, overflow:'hidden' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'2fr 100px 120px 130px 90px', padding:'8px 14px', borderBottom:`1px solid ${C.border}`, fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase' }}>
-            <span>Tema</span><span>Área</span><span>Estado</span><span>Responsable</span><span>Fecha fin</span>
+          <div style={{ display:'grid', gridTemplateColumns:'2fr 90px 110px 110px 80px 60px', padding:'8px 14px', borderBottom:`1px solid ${C.border}`, fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase' }}>
+            <span>Tema</span><span>Área</span><span>Estado</span><span>Responsable</span><span>Prioridad</span><span>Fecha fin</span>
           </div>
-          {f.length === 0
-            ? <div style={{ padding:24, textAlign:'center', color:C.muted, fontSize:13 }}>Sin temas</div>
-            : f.map(item => {
-              const cat = CATS.find(c => c.id === item.category)
-              const st  = ST.find(s => s.id === item.status)
-              const ov  = item.fechaFin && item.status !== 'done' && diasRestantes(fdStr(item.fechaFin)) < 0
-              return (
-                <div key={item.id} onClick={() => setItem(item)}
-                  style={{ display:'grid', gridTemplateColumns:'2fr 100px 120px 130px 90px', padding:'10px 14px', borderBottom:`1px solid ${C.border}`, cursor:'pointer', alignItems:'center', fontSize:13 }}
-                  onMouseEnter={e => e.currentTarget.style.background=C.surface}
-                  onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, overflow:'hidden' }}>
-                    <div style={{ width:3, height:18, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
-                    <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.text }}>{item.tema}</span>
-                  </div>
-                  <Tag id={item.category} type="cat" />
-                  <Tag id={item.status}   type="st" />
-                  <span style={{ fontSize:12, color:C.muted }}>{(item.propietario||'').split(' ')[0]}</span>
-                  <span style={{ fontSize:11, color:ov?'#f43f5e':C.muted, fontWeight:ov?700:400 }}>
-                    {item.fechaFin ? fmtFecha(fdStr(item.fechaFin)) : '—'}
-                  </span>
+          {f.map(item => {
+            const cat = CATS.find(c => c.id === item.category)
+            const st  = ST.find(s => s.id === item.status)
+            const ov  = item.fechaFin && item.status !== 'done' && diasRestantes(fdStr(item.fechaFin)) < 0
+            const oc  = ownerColor(item.propietario)
+            const pc  = priColor(item.prioridad)
+            return (
+              <div key={item.id} onClick={() => setItem(item)}
+                style={{ display:'grid', gridTemplateColumns:'2fr 90px 110px 110px 80px 60px', padding:'9px 14px', borderBottom:`1px solid ${C.border}`, cursor:'pointer', alignItems:'center', fontSize:12 }}
+                onMouseEnter={e => e.currentTarget.style.background=C.surface}
+                onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, overflow:'hidden' }}>
+                  <div style={{ width:3, height:18, borderRadius:2, background:ov?'#dc2626':cat?.color||C.muted, flexShrink:0 }} />
+                  <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.text }}>{item.tema}</span>
                 </div>
-              )
-            })}
+                <Tag id={item.category} type="cat" />
+                <Tag id={item.status}   type="st" />
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <div style={{ width:16, height:16, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff' }}>{iniciales(item.propietario)}</div>
+                  <span style={{ fontSize:11, color:C.muted }}>{(item.propietario||'').split(' ')[0]||'—'}</span>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color, width:'fit-content' }}>{item.prioridad||'—'}</span>
+                <span style={{ fontSize:11, color:ov?'#f43f5e':C.muted, fontWeight:ov?700:400 }}>
+                  {item.fechaFin ? fmtFecha(fdStr(item.fechaFin)) : '—'}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
