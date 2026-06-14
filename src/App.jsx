@@ -58,6 +58,9 @@ const priColor = p => PRI_COLORS[p] || { bg:C.surface, color:C.muted }
 // WIP limits per column (null = no limit)
 const WIP_LIMITS = { pending:null, inprogress:8, blocked:null, done:null }
 
+const PRIORIDADES  = ['P0', 'P1', 'P2', 'P3']
+const KNOWN_OWNERS = ['Juan Rodriguez Peisel', 'Francisco Toledo', 'Nacho Cruz', 'Maria Garcia']
+
 const FASES = [
   { id:'RTM',             label:'RTM',              labelEN:'RTM',             pct:10  },
   { id:'Viabilidad',      label:'Viabilidad',       labelEN:'Feasibility',     pct:25  },
@@ -1922,6 +1925,380 @@ const Historico = ({ items }) => {
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
+
+// ── NuevoTema ─────────────────────────────────────────────────────────────────
+const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
+  const [tema,   setTema]   = useState('')
+  const [obj,    setObj]    = useState('')
+  const [cat,    setCat]    = useState('projects')
+  const [prop,   setProp]   = useState('')
+  const [prio,   setPrio]   = useState('')
+  const [proy,   setProy]   = useState('')
+
+  useEffect(() => {
+    const h = e => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
+
+  const crear = () => {
+    if (!tema.trim()) return
+    onAdd({
+      id: uid(), tema: tema.trim(), objetivo: obj.trim(),
+      category: cat, propietario: prop.trim(),
+      prioridad: prio, risk: mapRisk(prio),
+      status: 'pending', estadoSheet: 'No iniciado',
+      fechaInicio: null, fechaFin: null,
+      archivos: '', notas: '', proyecto: proy,
+      subtareas: [], _local: true,
+    })
+    onClose()
+  }
+
+  const iSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6,
+    padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target===e.currentTarget && onClose()}>
+      <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`,
+        width:'100%', maxWidth:520, boxShadow:'0 8px 40px rgba(0,0,0,.15)',
+        animation:'modalProjIn 200ms cubic-bezier(0.23,1,0.32,1) both' }}>
+        <style>{`@keyframes modalProjIn{from{opacity:0;transform:scale(0.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+        {/* Header */}
+        <div style={{ padding:'16px 20px 14px', borderBottom:`1px solid ${C.border}`, background:C.card,
+          borderRadius:'14px 14px 0 0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span style={{ fontSize:15, fontWeight:700, color:C.text }}>+ Nuevo tema</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20 }}>✕</button>
+        </div>
+        {/* Body */}
+        <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <Lbl>Tema *</Lbl>
+            <input value={tema} onChange={e=>setTema(e.target.value)}
+              placeholder="Nombre del tema…" autoFocus
+              onKeyDown={e => e.key==='Enter' && !e.shiftKey && crear()}
+              style={iSt} />
+          </div>
+          <div>
+            <Lbl>Objetivo</Lbl>
+            <textarea value={obj} onChange={e=>setObj(e.target.value)}
+              placeholder="¿Qué se quiere conseguir?" rows={2}
+              style={{ ...iSt, resize:'vertical', fontFamily:'inherit' }} />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <Lbl>Categoría</Lbl>
+              <select value={cat} onChange={e=>setCat(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                {CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <Lbl>Prioridad</Lbl>
+              <select value={prio} onChange={e=>setPrio(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                <option value="">Sin prioridad</option>
+                {PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <Lbl>Responsable</Lbl>
+              <input list="owners-nuevo" value={prop} onChange={e=>setProp(e.target.value)}
+                placeholder="Nombre…" style={iSt} />
+              <datalist id="owners-nuevo">{KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}</datalist>
+            </div>
+            <div>
+              <Lbl>Proyecto</Lbl>
+              <select value={proy} onChange={e=>setProy(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                <option value="">Sin proyecto</option>
+                {proyectoNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        {/* Footer */}
+        <div style={{ padding:'12px 20px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end', gap:8 }}>
+          <Btn v="sec" onClick={onClose}>Cancelar</Btn>
+          <Btn onClick={crear} disabled={!tema.trim()}>Crear tema</Btn>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── ModalItem ─────────────────────────────────────────────────────────────────
+const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast }) => {
+  const [item,    setItem]    = useState(itemOrig)
+  const [editing, setEditing] = useState(false)
+  const [nc,      setNc]      = useState('')
+  const [comments, setComments] = useState(() => getComments(norm(itemOrig.tema)))
+
+  // Edit state
+  const [eTema,  setETema]  = useState(itemOrig.tema || '')
+  const [eObj,   setEObj]   = useState(itemOrig.objetivo || '')
+  const [eSt,    setESt]    = useState(itemOrig.status || 'pending')
+  const [eProp,  setEProp]  = useState(itemOrig.propietario || '')
+  const [ePrio,  setEPrio]  = useState(itemOrig.prioridad || '')
+  const [eFin,   setEFin]   = useState(itemOrig.fechaFin ? fdStr(itemOrig.fechaFin) : '')
+  const [eNotas, setENotas] = useState(itemOrig.notas || '')
+  const [eProy,  setEProy]  = useState(itemOrig.proyecto || '')
+  const [eCat,   setECat]   = useState(itemOrig.category || 'projects')
+
+  useEffect(() => {
+    const h = e => e.key === 'Escape' && (editing ? setEditing(false) : onClose())
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [editing])
+
+  const guardar = () => {
+    const fechaFinParsed = eFin ? new Date(eFin + 'T12:00') : null
+    const fields = {
+      tema:       eTema.trim(),
+      objetivo:   eObj.trim(),
+      status:     eSt,
+      estadoSheet: ST_TO_SHEET[eSt] || 'No iniciado',
+      propietario: eProp.trim(),
+      prioridad:  ePrio,
+      risk:       mapRisk(ePrio),
+      fechaFin:   fechaFinParsed,
+      notas:      eNotas.trim(),
+      proyecto:   eProy,
+      category:   eCat,
+    }
+    saveOverride(norm(item.tema), fields)
+    if (eSt === 'done') saveDoneTs(item.id)
+    const updated = { ...item, ...fields, _hasLocal: true }
+    setItem(updated)
+    onItemChange(item.id, fields, true)
+    setEditing(false)
+    onToast?.('Cambios guardados')
+  }
+
+  const agregarComentario = () => {
+    const text = nc.trim()
+    if (!text) return
+    const c = saveComment(norm(item.tema), text)
+    setComments(prev => [c, ...prev])
+    setNc('')
+  }
+
+  const cat     = CATS.find(c => c.id === item.category)
+  const stInfo  = ST.find(s => s.id === item.status)
+  const pc      = priColor(item.prioridad)
+  const oc      = ownerColor(item.propietario)
+
+  const iSt = { background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6,
+    padding:'6px 9px', fontSize:12, outline:'none', width:'100%', boxSizing:'border-box' }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target===e.currentTarget && onClose()}>
+      <style>{`
+        @keyframes modalItemIn{from{opacity:0;transform:scale(0.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+        .mi-tab-btn{transition:color 150ms,border-color 150ms}
+      `}</style>
+      <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`,
+        width:'100%', maxWidth:640, maxHeight:'92vh', overflow:'hidden',
+        display:'flex', flexDirection:'column',
+        animation:'modalItemIn 200ms cubic-bezier(0.23,1,0.32,1) both',
+        boxShadow:'0 8px 40px rgba(0,0,0,.15)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'14px 18px 12px', borderBottom:`1px solid ${C.border}`,
+          background:C.card, borderRadius:'14px 14px 0 0' }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', marginBottom:4 }}>
+                {cat && <span style={{ fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:3,
+                  background:cat.bg, color:cat.color, textTransform:'uppercase' }}>{cat.label}</span>}
+                {stInfo && <span style={{ fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:3,
+                  background:stInfo.color+'22', color:stInfo.color, textTransform:'uppercase' }}>{stInfo.label}</span>}
+                {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3,
+                  background:pc.bg, color:pc.color }}>{item.prioridad}</span>}
+                {item._hasLocal && <span style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411',
+                  border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>~local</span>}
+              </div>
+              <h3 style={{ fontSize:15, fontWeight:700, color:C.text, margin:0, lineHeight:1.3 }}>{item.tema}</h3>
+              {item.proyecto && <div style={{ fontSize:11, color:C.muted, marginTop:3 }}>📁 {item.proyecto}</div>}
+            </div>
+            <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+              {!editing
+                ? <button onClick={() => setEditing(true)}
+                    style={{ background:C.surface, border:`1px solid ${C.border}`, color:C.muted,
+                      borderRadius:6, padding:'4px 10px', fontSize:11, fontWeight:600, cursor:'pointer' }}>Editar</button>
+                : <>
+                    <button onClick={guardar}
+                      style={{ background:C.accent, border:'none', color:'#fff',
+                        borderRadius:6, padding:'4px 12px', fontSize:11, fontWeight:600, cursor:'pointer' }}>Guardar</button>
+                    <button onClick={() => setEditing(false)}
+                      style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted,
+                        borderRadius:6, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>Cancelar</button>
+                  </>}
+              <button onClick={onClose}
+                style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, padding:0 }}>✕</button>
+            </div>
+          </div>
+
+          {/* Meta row - view mode */}
+          {!editing && (
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:8, flexWrap:'wrap' }}>
+              {item.propietario && (
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <div style={{ width:18, height:18, borderRadius:'50%', background:oc,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:7, fontWeight:700, color:'#fff' }}>{iniciales(item.propietario)}</div>
+                  <span style={{ fontSize:11, color:C.muted }}>{item.propietario.split(' ')[0]}</span>
+                </div>
+              )}
+              {item.fechaFin && <span style={{ fontSize:11, color:C.muted }}>
+                Fin: <AlertFecha endDate={item.fechaFin} status={item.status} /></span>}
+              {item.archivos && <span style={{ fontSize:11, color:C.accent, cursor:'pointer' }}>📎 Archivos</span>}
+            </div>
+          )}
+
+          {/* Edit form */}
+          {editing && (
+            <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:8 }}>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Tema</div>
+                <input value={eTema} onChange={e=>setETema(e.target.value)} style={iSt} />
+              </div>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Objetivo</div>
+                <textarea value={eObj} onChange={e=>setEObj(e.target.value)} rows={2}
+                  style={{ ...iSt, resize:'vertical', fontFamily:'inherit' }} />
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Estado</div>
+                  <select value={eSt} onChange={e=>setESt(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                    {ST.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Prioridad</div>
+                  <select value={ePrio} onChange={e=>setEPrio(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                    <option value="">Sin prioridad</option>
+                    {PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fecha fin</div>
+                  <input type="date" value={eFin} onChange={e=>setEFin(e.target.value)}
+                    style={{ ...iSt, colorScheme:'light' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Categoría</div>
+                  <select value={eCat} onChange={e=>setECat(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                    {CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Responsable</div>
+                  <input list="owners-mi-edit" value={eProp} onChange={e=>setEProp(e.target.value)}
+                    placeholder="Nombre…" style={iSt} />
+                  <datalist id="owners-mi-edit">{KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}</datalist>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Proyecto</div>
+                  <select value={eProy} onChange={e=>setEProy(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
+                    <option value="">Sin proyecto</option>
+                    {proyectoNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Notas</div>
+                <textarea value={eNotas} onChange={e=>setENotas(e.target.value)} rows={2}
+                  style={{ ...iSt, resize:'vertical', fontFamily:'inherit' }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Body - view mode */}
+        {!editing && (
+          <div style={{ flex:1, overflowY:'auto', padding:18 }}>
+            {item.objetivo && (
+              <div style={{ marginBottom:14 }}>
+                <Lbl>Objetivo</Lbl>
+                <p style={{ fontSize:13, color:C.text, lineHeight:1.7, margin:0,
+                  background:C.card, borderRadius:8, padding:10 }}>{item.objetivo}</p>
+              </div>
+            )}
+            {item.notas && (
+              <div style={{ marginBottom:14 }}>
+                <Lbl>Notas</Lbl>
+                <p style={{ fontSize:13, color:C.text, lineHeight:1.7, margin:0,
+                  background:C.card, borderRadius:8, padding:10, whiteSpace:'pre-wrap' }}>{item.notas}</p>
+              </div>
+            )}
+
+            {/* Subtareas */}
+            {item.subtareas?.length > 0 && (
+              <div style={{ marginBottom:14 }}>
+                <Lbl>Subtareas ({item.subtareas.length})</Lbl>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {item.subtareas.map((st, i) => {
+                    const ss = ST.find(s => s.id === st.status)
+                    return (
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:8,
+                        background:C.card, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px' }}>
+                        <div style={{ width:6, height:6, borderRadius:'50%', background:ss?.color||C.muted, flexShrink:0 }} />
+                        <span style={{ fontSize:12, color:C.text, flex:1 }}>{st.title}</span>
+                        {st.prop && <span style={{ fontSize:10, color:C.muted }}>{st.prop.split(' ')[0]}</span>}
+                        {st.fechaFin && <span style={{ fontSize:10, color:C.muted }}>{fmtFecha(fdStr(st.fechaFin))}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Comments */}
+            <div>
+              <Lbl>Comentarios ({comments.length})</Lbl>
+              <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+                <input value={nc} onChange={e=>setNc(e.target.value)}
+                  placeholder="Añadir comentario…"
+                  onKeyDown={e => e.key==='Enter' && agregarComentario()}
+                  style={{ flex:1, background:C.card, color:C.text, border:`1px solid ${C.border}`,
+                    borderRadius:6, padding:'7px 10px', fontSize:12, outline:'none' }} />
+                <Btn v="sec" onClick={agregarComentario} style={{ padding:'7px 12px', fontSize:12 }}>Enviar</Btn>
+              </div>
+              {comments.map(c => (
+                <div key={c.id} style={{ background:C.card, border:`1px solid ${C.border}`,
+                  borderRadius:8, padding:'8px 12px', marginBottom:6 }}>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:3 }}>{c.ts}</div>
+                  <div style={{ fontSize:12, color:C.text, lineHeight:1.6 }}>{c.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`,
+          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <button
+            onClick={() => {
+              if (!window.confirm('¿Eliminar este tema del tablero local?')) return
+              saveOverride(norm(item.tema), { status:'done', _deleted:true })
+              onItemChange(item.id, { status:'done', _deleted:true })
+              onClose()
+            }}
+            style={{ background:'none', border:'none', color:'#f43f5e', fontSize:12,
+              cursor:'pointer', padding:'4px 0', fontWeight:600 }}>
+            Eliminar local
+          </button>
+          <Btn v="sec" onClick={onClose}>Cerrar</Btn>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function OpsBoard() {
   const [vista,       setVista]      = useState('Dashboard')
   const [lang,        setLang]       = useState('es')
