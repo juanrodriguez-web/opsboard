@@ -234,66 +234,101 @@ const Toast = ({ msg, type = 'success', onHide }) => {
 
 // ── Tarjeta ──────────────────────────────────────────────────────────────────
 const Tarjeta = ({ item, onClick, onNextSt }) => {
-  const cat        = CATS.find(c => c.id === item.category)
-  const nextIdx    = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
-  const nextId     = ST[nextIdx].id
-  const nextSt     = ST[nextIdx]
-  const allSubs    = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
-  const stOk       = allSubs.filter(s => s.status === 'done').length
-  const stTot      = allSubs.length
-  const dl         = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
-  const oc         = ownerColor(item.propietario)
-  const isOverdue  = dl !== null && dl < 0
-  const isBlocked  = item.status === 'blocked'
-  const isDone     = item.status === 'done'
-  const leftColor  = isBlocked ? '#e11d48' : isOverdue ? '#dc2626' : cat?.color || C.muted
-  const pc         = priColor(item.prioridad)
+  const cat       = CATS.find(c => c.id === item.category)
+  const nextIdx   = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
+  const nextId    = ST[nextIdx].id
+  const nextSt    = ST[nextIdx]
+  const allSubs   = [...(item.subtareas||[]), ...(item.subtareasLocal||[])]
+  const stOk      = allSubs.filter(s => s.status === 'done').length
+  const stTot     = allSubs.length
+  const dl        = item.fechaFin && item.status !== 'done' ? diasRestantes(fdStr(item.fechaFin)) : null
+  const isOverdue = dl !== null && dl < 0
+  const isBlocked = item.status === 'blocked'
+  const isDone    = item.status === 'done'
+  const pc        = priColor(item.prioridad)
+  const oc        = ownerColor(item.propietario)
+  // soft pastel of ownerColor for square avatar bg
+  const ocSoft    = oc + '22'
+  // due label
+  const dueLabel  = item.fechaFin && item.status !== 'done'
+    ? (() => { const d = fdStr(item.fechaFin); const [y,m,dd] = d.split('-'); return `${dd}/${m}` })()
+    : null
+  const dueColor  = isOverdue ? '#dc2626' : dl !== null && dl <= 3 ? '#f59e0b' : '#9b978f'
+  const borderColor = (isOverdue || isBlocked)
+    ? (isBlocked ? '#e11d4844' : '#dc262644')
+    : C.border
 
   return (
-    <div onClick={() => onClick(item)}
+    <div
+      onClick={() => onClick(item)}
       style={{
-        background: C.card, borderRadius:8, padding:'10px 12px', marginBottom:8,
-        border:`1px solid ${(isOverdue||isBlocked) ? leftColor+'44' : C.border}`,
-        borderLeft:`3px solid ${leftColor}`,
-        cursor:'pointer', opacity: isDone ? 0.72 : 1,
-        transition:'box-shadow 150ms ease-out',
+        background:'#fff', borderRadius:12, padding:'11px 12px 12px',
+        border:`1px solid ${borderColor}`,
+        marginBottom:8, cursor:'pointer', opacity: isDone ? 0.7 : 1,
+        display:'flex', flexDirection:'column', gap:9,
+        transition:'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
       }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow='0 3px 12px rgba(0,0,0,.09)'}
-      onMouseLeave={e => e.currentTarget.style.boxShadow='none'}>
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor='#d6d1c8'
+        e.currentTarget.style.boxShadow='0 4px 14px rgba(28,27,25,.07)'
+        e.currentTarget.style.transform='translateY(-1px)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor=borderColor
+        e.currentTarget.style.boxShadow='none'
+        e.currentTarget.style.transform='translateY(0)'
+      }}>
 
-      {/* Row 1: title + priority badge */}
-      <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:5 }}>
-        <span style={{ flex:1, fontSize:12, fontWeight:600, color:isDone?C.muted:C.text, lineHeight:1.35, textDecoration:isDone?'line-through':'none' }}>{item.tema}</span>
-        <div style={{ display:'flex', gap:3, flexShrink:0, alignItems:'center' }}>
-          {item._hasLocal && <span title="Cambios locales pendientes de sincronización" style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, cursor:'help', fontWeight:700 }}>~local</span>}
-          {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color, flexShrink:0 }}>{item.prioridad}</span>}
-        </div>
+      {/* Row 1: cat dot + cat label + ~local badge + prio badge */}
+      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+        <span style={{ width:6, height:6, borderRadius:'50%', background: cat?.color || C.muted, flexShrink:0 }} />
+        <span style={{ fontSize:10, fontWeight:600, letterSpacing:'.04em', textTransform:'uppercase', color:'#9b978f' }}>
+          {cat?.label || 'Sin categoría'}
+        </span>
+        <span style={{ flex:1 }} />
+        {item._hasLocal && (
+          <span title="Cambios locales pendientes" style={{ fontFamily:"'Geist Mono',monospace", fontSize:9, color:'#a8a39a', border:'1px solid #e8e5df', borderRadius:4, padding:'1px 4px', letterSpacing:'.02em' }}>~local</span>
+        )}
+        {item.prioridad && (
+          <span style={{ fontFamily:"'Geist Mono',monospace", fontSize:9.5, fontWeight:500, color:pc.color, background:pc.bg, border:`1px solid ${pc.bd||pc.bg}`, borderRadius:5, padding:'1px 5px' }}>
+            {item.prioridad}
+          </span>
+        )}
       </div>
 
-      {/* Row 2: category tag + project tag */}
-      {(cat || item.proyecto) && (
-        <div style={{ display:'flex', gap:4, marginBottom:6, flexWrap:'wrap', alignItems:'center' }}>
-          {cat && <span style={{ fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:10, background:cat.bg, color:cat.color }}>{cat.label}</span>}
-          {item.proyecto && <span style={{ fontSize:9, padding:'2px 6px', borderRadius:10, background:C.surface, color:C.muted, border:`1px solid ${C.border}`, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.proyecto}</span>}
-        </div>
-      )}
+      {/* Row 2: tema text */}
+      <div style={{ fontSize:13, fontWeight:550, color: isDone ? C.muted : '#1c1b19', lineHeight:1.38, letterSpacing:'-.005em', textDecoration: isDone ? 'line-through' : 'none' }}>
+        {item.tema}
+      </div>
 
-      {/* Row 3: owner + date + subtasks count + → button */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <div style={{ width:20, height:20, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, fontWeight:700, color:'#fff', flexShrink:0 }} title={item.propietario||'Sin propietario'}>{iniciales(item.propietario)}</div>
-          <AlertFecha endDate={item.fechaFin} status={item.status} />
-          {stTot > 0 && <span style={{ fontSize:10, color:C.muted }}>{stOk}/{stTot}</span>}
-        </div>
-        <button
-          title={`Cambiar a: ${nextSt.label}`}
-          aria-label={`Cambiar estado a ${nextSt.label}`}
-          onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
-          style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 8px', fontSize:11, cursor:'pointer', color:C.muted, transition:'all 130ms ease-out', fontWeight:600, lineHeight:1 }}
-          onMouseEnter={e => { e.currentTarget.style.background=nextSt.color+'22'; e.currentTarget.style.color=nextSt.color; e.currentTarget.style.borderColor=nextSt.color+'55' }}
-          onMouseLeave={e => { e.currentTarget.style.background=C.surface; e.currentTarget.style.color=C.muted; e.currentTarget.style.borderColor=C.border }}>
-          →
-        </button>
+      {/* Row 3: owner avatar + name + subtasks + due date + → button */}
+      <div style={{ display:'flex', alignItems:'center', gap:7, marginTop:1 }}>
+        <span
+          title={item.propietario || 'Sin propietario'}
+          style={{ width:19, height:19, borderRadius:6, background:ocSoft, color:oc, fontFamily:"'Geist Mono',monospace", fontSize:9, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          {iniciales(item.propietario)}
+        </span>
+        <span style={{ fontSize:11.5, color:'#6b6862', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:80 }}>
+          {item.propietario ? item.propietario.split(' ')[0] : '—'}
+        </span>
+        {stTot > 0 && <span style={{ fontSize:10, color:'#9b978f', fontFamily:"'Geist Mono',monospace" }}>{stOk}/{stTot}</span>}
+        <span style={{ flex:1 }} />
+        {dueLabel && (
+          <span style={{ fontFamily:"'Geist Mono',monospace", fontSize:10.5, color:dueColor, display:'flex', alignItems:'center', gap:3 }}>
+            {isOverdue && '⚠ '}{dueLabel}
+          </span>
+        )}
+        {!isDone && (
+          <button
+            title={`Avanzar a: ${nextSt.label}`}
+            aria-label={`Cambiar estado a ${nextSt.label}`}
+            onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
+            style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#6b6862', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background=C.accent; e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color='#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#6b6862' }}>
+            →
+          </button>
+        )}
       </div>
     </div>
   )
@@ -2370,73 +2405,142 @@ export default function OpsBoard() {
 
   const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
+  const VIEW_LABELS = {
+    'Dashboard':          'Dashboard Operativo',
+    'Tablero':            'Tablero de Temas',
+    '🗂️ Proyectos':      'Proyectos',
+    '📋 Reporte Semanal': 'Reporte Semanal',
+    '📅 Campañas CVM':   'Campañas CVM',
+    '✨ IA Intake':       'IA Intake',
+    '⧆ Histórico':       'Histórico',
+  }
+
+  // Nav icon map for sidebar
+  const NAV_ICONS = {
+    'Dashboard':          '◈',
+    'Tablero':            '⊞',
+    '🗂️ Proyectos':      '◫',
+    '📋 Reporte Semanal': '≡',
+    '📅 Campañas CVM':   '◷',
+    '✨ IA Intake':       '✦',
+    '⧆ Histórico':       '⊙',
+  }
+
   return (
-    <div style={{ background:C.bg, minHeight:'100vh', color:C.text, fontFamily:'system-ui,sans-serif' }}>
-      {/* Header */}
-     
-      <header style={{ background:C.surface, padding:'0 20px', display:'flex', alignItems:'center', gap:10, height:52, position:'sticky', top:0, zIndex:100, flexDirection:'column', justifyContent:'center' }}>
-        {/* Gradient accent bar */}
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e8243b 0%,#c4001a 100%)' }} />
-        <div style={{ display:'flex', alignItems:'center', gap:10, width:'100%' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginRight:6, flexShrink:0 }}>
-            <div style={{ width:28, height:28, borderRadius:7, background:'linear-gradient(135deg,#e8243b,#c4001a)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:'#fff' }}>⬡</div>
-            <span style={{ fontSize:13, fontWeight:700, color:C.text }}>Ops<span style={{ color:'#e60028' }}>Board</span></span>
+    <div style={{ display:'flex', height:'100vh', background:C.bg, color:C.text, fontFamily:"'Geist',system-ui,sans-serif", overflow:'hidden' }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#d6d1c8;border-radius:4px}`}</style>
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      <div style={{ width:240, background:'#fff', borderRight:`1px solid ${C.border}`, display:'flex', flexDirection:'column', flexShrink:0, overflow:'hidden' }}>
+        {/* Logo */}
+        <div style={{ padding:'20px 20px 16px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+            <div style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#e8243b,#c4001a)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:800, color:'#fff', flexShrink:0 }}>⬡</div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, letterSpacing:'-.02em', color:C.text, lineHeight:1 }}>Ops<span style={{ color:C.accent }}>Board</span></div>
+              <div style={{ fontSize:10, color:'#9b978f', marginTop:2, letterSpacing:'.01em' }}>Gestión operativa</div>
+            </div>
           </div>
-          <nav style={{ display:'flex', gap:2, flex:1, overflowX:'auto' }}>
-            {VISTAS.map(v => (
+        </div>
+
+        <div style={{ height:1, background:C.border, margin:'0 16px 8px' }} />
+
+        {/* Nav items */}
+        <nav style={{ flex:1, padding:'0 10px', display:'flex', flexDirection:'column', gap:2, overflowY:'auto' }}>
+          {VISTAS.map(v => {
+            const on = vista === v
+            return (
               <button key={v} onClick={() => setVista(v)}
-                style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:'none', cursor:'pointer',
-                  background:vista===v?C.accent+'22':'transparent', color:vista===v?C.accent:C.muted, whiteSpace:'nowrap' }}>
-                {v}
+                style={{ width:'100%', padding:'9px 10px', borderRadius:8, border:'none',
+                  background: on ? '#fef2f2' : 'transparent',
+                  color: on ? C.accent : '#6b6862',
+                  fontSize:13, fontWeight: on ? 600 : 500,
+                  cursor:'pointer', textAlign:'left', letterSpacing:'-.003em',
+                  display:'flex', alignItems:'center', gap:9,
+                  transition:'background 120ms, color 120ms' }}
+                onMouseEnter={e => { if(!on) e.currentTarget.style.background='#f5f3f0' }}
+                onMouseLeave={e => { if(!on) e.currentTarget.style.background='transparent' }}>
+                <span style={{ fontSize:12, opacity:.7, width:14, textAlign:'center', flexShrink:0 }}>{NAV_ICONS[v]}</span>
+                {VIEW_LABELS[v] || v.replace(/^[^\w]+/, '')}
               </button>
-            ))}
-          </nav>
-          <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
-            <div style={{ display:'flex', border:`1px solid ${C.border}`, borderRadius:6, overflow:'hidden' }}>
+            )
+          })}
+        </nav>
+
+        {/* Bottom: lang toggle + last update + refresh */}
+        <div style={{ padding:'12px 14px 16px', borderTop:`1px solid ${C.border}` }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <div style={{ display:'flex', border:`1px solid ${C.border}`, borderRadius:6, overflow:'hidden', flex:1 }}>
               {['es','en'].map(l => (
-                <button key={l} onClick={()=>setLang(l)} style={{ padding:'3px 9px', background:lang===l?C.accent:'none', color:lang===l?'#fff':C.muted, border:'none', cursor:'pointer', fontWeight:lang===l?700:400, textTransform:'uppercase', fontSize:10, lineHeight:1 }}>{l}</button>
+                <button key={l} onClick={() => setLang(l)}
+                  style={{ flex:1, padding:'4px 0', background:lang===l?C.accent:'transparent', color:lang===l?'#fff':'#9b978f',
+                    border:'none', cursor:'pointer', fontWeight:lang===l?700:400, textTransform:'uppercase', fontSize:10, letterSpacing:'.04em' }}>
+                  {l}
+                </button>
               ))}
             </div>
-            {lastUpd && <span style={{ fontSize:11, color:C.muted }}>{pad(lastUpd.getHours())}:{pad(lastUpd.getMinutes())}</span>}
-            <button onClick={loadData} disabled={loading}
-              style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer' }}>
-              {loading ? '⏳' : '🔄'}
+            {lastUpd && (
+              <span style={{ fontSize:10, color:'#9b978f', fontFamily:"'Geist Mono',monospace" }}>
+                {pad(lastUpd.getHours())}:{pad(lastUpd.getMinutes())}
+              </span>
+            )}
+            <button onClick={loadData} disabled={loading} title="Actualizar datos"
+              style={{ background:'none', border:`1px solid ${C.border}`, color:'#9b978f', borderRadius:6, padding:'4px 9px', fontSize:12, cursor:'pointer', lineHeight:1 }}>
+              {loading ? '⏳' : '↺'}
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Content */}
-      <div style={{ padding:'0 20px 60px' }}>
-        {loading && (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:280, gap:12, color:C.muted }}>
-            <div style={{ width:32, height:32, borderRadius:'50%', border:`3px solid ${C.border}`, borderTopColor:C.accent, animation:'spin .8s linear infinite' }} />
-            <span>Cargando desde Seguimiento…</span>
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          </div>
-        )}
-        {!loading && error && (
-          <div style={{ marginTop:40, textAlign:'center', color:'#f43f5e' }}>
-            <p style={{ fontWeight:700, marginBottom:8 }}>⚠️ Error cargando datos</p>
-            <p style={{ fontSize:12, color:C.muted, marginBottom:16 }}>{error}</p>
-            <Btn onClick={loadData}>Reintentar</Btn>
-          </div>
-        )}
-        {!loading && !error && (
-          <>
-            {vista === 'Tablero' && (
-              <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
-                owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
-                onNuevo={() => setShowNuevo(true)} />
-            )}
-            {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
-            {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
-            {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
-            {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
-            {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
-            {vista === '⧆ Histórico'        && <Historico items={allItems} />}
-          </>
-        )}
+      {/* ── Main column ──────────────────────────────────────────────────── */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+        {/* Topbar */}
+        <div style={{ height:56, background:'#fff', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', padding:'0 24px', gap:16, flexShrink:0 }}>
+          <h1 style={{ flex:1, fontSize:14, fontWeight:600, color:C.text, letterSpacing:'-.005em', margin:0 }}>
+            {VIEW_LABELS[vista] || vista}
+          </h1>
+          {vista === 'Tablero' && (
+            <button onClick={() => setShowNuevo(true)}
+              style={{ padding:'7px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms' }}
+              onMouseEnter={e => e.currentTarget.style.background='#d41c2f'}
+              onMouseLeave={e => e.currentTarget.style.background=C.accent}>
+              + Nuevo tema
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1, overflow:'auto', padding:24 }}>
+          {loading && (
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:280, gap:12, color:C.muted }}>
+              <div style={{ width:32, height:32, borderRadius:'50%', border:`3px solid ${C.border}`, borderTopColor:C.accent, animation:'spin .8s linear infinite' }} />
+              <span style={{ fontSize:13 }}>Cargando desde Seguimiento…</span>
+            </div>
+          )}
+          {!loading && error && (
+            <div style={{ marginTop:40, textAlign:'center', color:'#f43f5e' }}>
+              <p style={{ fontWeight:700, marginBottom:8 }}>⚠️ Error cargando datos</p>
+              <p style={{ fontSize:12, color:C.muted, marginBottom:16 }}>{error}</p>
+              <Btn onClick={loadData}>Reintentar</Btn>
+            </div>
+          )}
+          {!loading && !error && (
+            <>
+              {vista === 'Tablero' && (
+                <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
+                  owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
+                  onNuevo={() => setShowNuevo(true)} />
+              )}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
+              {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
+              {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
+              {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
+              {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
+              {vista === '⧆ Histórico'        && <Historico items={allItems} />}
+            </>
+          )}
+        </div>
       </div>
 
       {showNuevo && (
