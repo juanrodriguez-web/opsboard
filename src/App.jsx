@@ -14,7 +14,7 @@ const CATS = [
 ]
 const ST = [
   { id:'pending',    label:'Pendiente',  color:'#64748b' },
-  { id:'inprogress', label:'En Curso',   color:'#6366f1' },
+  { id:'inprogress', label:'En Curso',   color:'#f59e0b' },
   { id:'blocked',    label:'Bloqueado',  color:'#e11d48' },
   { id:'done',       label:'Completado', color:'#10b981' },
 ]
@@ -28,8 +28,8 @@ const ST_TO_SHEET = {
   blocked:'En peligro',  done:'Hecho',
 }
 const C = {
-  bg:'#f0f2f8', surface:'#fafbfe', card:'#ffffff',
-  border:'#dde2ee', text:'#1a1d2e', muted:'#6b7899', accent:'#6366f1',
+  bg:'#f5f3f0', surface:'#fafaf8', card:'#ffffff',
+  border:'#ebe8e3', text:'#1c1b19', muted:'#6b6862', accent:'#e8243b',
 }
 const OV_KEY           = 'obs-status-overrides'
 const COMMENTS_KEY     = 'obs-comments'
@@ -74,11 +74,11 @@ const faseLabel = (fase,lng='es') => { if(!fase) return '—'; const f=FASES.fin
 // CVM campaign helpers
 const TIPO_COLORS = {
   'oferta one shot':'#d97706', 'oferta':'#d97706',
-  'reminder':'#6366f1', 'bau':'#475569',
+  'reminder':'#e8243b', 'bau':'#475569',
   'reactivacion':'#e11d48', 'reactivación':'#e11d48',
 }
 const ESTADO_CAMP_COLORS = {
-  'planificado':'#6366f1', 'enviado':'#10b981', 'cancelado':'#e11d48',
+  'planificado':'#e8243b', 'enviado':'#10b981', 'cancelado':'#e11d48',
 }
 const tipoColor   = t => TIPO_COLORS[norm(t)]   || '#0891b2'
 const estadoCColor = e => ESTADO_CAMP_COLORS[norm(e)] || '#64748b'
@@ -482,7 +482,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
                 )}
                 {archCount > 0 && (
                   <div style={{ fontSize:10, color:C.muted, background:C.surface, border:`1px solid ${C.border}`, borderRadius:5, padding:'5px 8px', marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
-                    <span style={{ color:'#818cf8' }}>⬡</span> {archCount} tema{archCount!==1?'s':''} en Histórico
+                    <span style={{ color:'#e8243b' }}>⬡</span> {archCount} tema{archCount!==1?'s':''} en Histórico
                   </div>
                 )}
 
@@ -888,7 +888,7 @@ const GanttChart = ({ temas }) => {
             </span>
           ))}
           {todayP >= 0 && todayP <= 100 && (
-            <span style={{ position:'absolute', left:`${todayP}%`, fontSize:10, color:'#818cf8', transform:'translateX(-50%)', fontWeight:700 }}>▼</span>
+            <span style={{ position:'absolute', left:`${todayP}%`, fontSize:10, color:'#e8243b', transform:'translateX(-50%)', fontWeight:700 }}>▼</span>
           )}
         </div>
 
@@ -910,7 +910,7 @@ const GanttChart = ({ temas }) => {
                   <div key={ti} style={{ position:'absolute', left:`${(tk.getTime()-minTs)/span*100}%`, top:0, bottom:0, width:1, background:C.border+'66' }} />
                 ))}
                 {todayP >= 0 && todayP <= 100 && (
-                  <div style={{ position:'absolute', left:`${todayP}%`, top:0, bottom:0, width:1.5, background:'#818cf8', zIndex:2 }} />
+                  <div style={{ position:'absolute', left:`${todayP}%`, top:0, bottom:0, width:1.5, background:'#e8243b', zIndex:2 }} />
                 )}
                 <div style={{
                   position:'absolute', left:`${startP}%`, width:`${widthP}%`,
@@ -930,7 +930,7 @@ const GanttChart = ({ temas }) => {
         {/* Legend */}
         <div style={{ marginLeft:172, marginTop:12, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
           <span style={{ display:'flex', alignItems:'center', gap:5 }}>
-            <div style={{ width:14, height:1.5, background:'#818cf8' }} />
+            <div style={{ width:14, height:1.5, background:'#e8243b' }} />
             <span style={{ fontSize:9, color:C.muted }}>Hoy</span>
           </span>
           {ST.map(s => (
@@ -963,6 +963,7 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   const [editing,      setEditing]      = useState(false)
   const [editDesc,     setEditDesc]     = useState(proyectoOrig.descripcion || '')
   const [editProp,     setEditProp]     = useState(proyectoOrig.propietario || '')
+  const [editIni,      setEditIni]      = useState(proyectoOrig.fechaInicio ? fdStr(proyectoOrig.fechaInicio) : '')
   const [editFin,      setEditFin]      = useState(proyectoOrig.fechaFin ? fdStr(proyectoOrig.fechaFin) : '')
   const [editPrio,     setEditPrio]     = useState(proyectoOrig.prioridad || '')
   const [editStatus,     setEditStatus]     = useState(proyectoOrig.status || 'pending')
@@ -978,7 +979,7 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   }, [editing])
 
   const guardarEdicion = () => {
-    const flds = { descripcion:editDesc.trim(), propietario:editProp.trim(), fechaFin:editFin||null, prioridad:editPrio, status:editStatus,
+    const flds = { descripcion:editDesc.trim(), propietario:editProp.trim(), fechaInicio:editIni||null, fechaFin:editFin||null, prioridad:editPrio, status:editStatus,
       desarrollo:editDesarrollo.trim(), fase:editFase, capex:editCapex?parseFloat(editCapex)||null:null, nombreEN:editNombreEN.trim() }
     saveProyOverride(proyecto.nombre, flds)
     const updated = { ...proyecto, ...flds, _hasLocalProy:true }
@@ -1031,7 +1032,7 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
         @keyframes rowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .modal-tab-btn{transition:color 150ms ease-out,border-color 150ms ease-out!important}
         .add-tema-btn{transition:border-color 150ms ease-out,color 150ms ease-out!important}
-        .add-tema-btn:hover{border-color:#818cf8!important;color:#818cf8!important}
+        .add-tema-btn:hover{border-color:#e8243b!important;color:#e8243b!important}
       `}</style>
       <div style={{
         background:C.surface, borderRadius:14, border:`1px solid ${C.border}`,
@@ -1139,6 +1140,10 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
                       <option value="">Sin prioridad</option>
                       {PRIORIDADES.filter(Boolean).map(p=><option key={p} value={p}>{p}</option>)}
                     </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fecha inicio</div>
+                    <input type="date" value={editIni} onChange={e=>setEditIni(e.target.value)} style={{ ...iSt, colorScheme:'light' }} />
                   </div>
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fecha fin</div>
@@ -1447,6 +1452,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
                     )}
                     {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{p.prioridad}</span>}
                     {p.desarrollo && (() => { const isVF=norm(p.desarrollo)==='vodafone'; return <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:isVF?'#e8001c18':'#1a5fe318', color:isVF?'#b30016':'#1244a8' }}>{p.desarrollo}</span> })()}
+                    {p.fechaInicio && <span style={{ fontSize:10, color:C.muted }}>Inicio: {fmtFecha(fdStr(p.fechaInicio))}</span>}
                     {diasLabel && <span style={{ fontSize:10, fontWeight:dias!==null&&dias<=7?700:400, color:diasColor }}>{diasLabel}</span>}
                     <span style={{ fontSize:10, color:C.muted, marginLeft:'auto' }}>
                       {temas.length} tema{temas.length!==1?'s':''}
@@ -1649,8 +1655,8 @@ const Reporte = ({ items, proyectos=[], lang='es' }) => {
   ]
   const MONTH_ENDS = MONTH_STARTS.map((_,i) => { const n=MONTH_STARTS[i+1]||new Date(2027,3,1); return new Date(n-1) })
   const monthActive = (p,mi) => {
-    if(!p.fechaInicio||!p.fechaFin) return false
-    const s=new Date(fdStr(p.fechaInicio)), e=new Date(fdStr(p.fechaFin))
+    if(!p.fechaFin) return false
+    const s=p.fechaInicio?new Date(fdStr(p.fechaInicio)):new Date(fdStr(p.fechaFin)), e=new Date(fdStr(p.fechaFin))
     return s<=MONTH_ENDS[mi] && e>=MONTH_STARTS[mi]
   }
   const VF='#e8001c', SC='#1a5fe3'
@@ -2370,10 +2376,10 @@ export default function OpsBoard() {
      
       <header style={{ background:C.surface, padding:'0 20px', display:'flex', alignItems:'center', gap:10, height:52, position:'sticky', top:0, zIndex:100, flexDirection:'column', justifyContent:'center' }}>
         {/* Gradient accent bar */}
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e60028 0%,#6366f1 45%,#06b6d4 100%)' }} />
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,#e8243b 0%,#c4001a 100%)' }} />
         <div style={{ display:'flex', alignItems:'center', gap:10, width:'100%' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginRight:6, flexShrink:0 }}>
-            <div style={{ width:28, height:28, borderRadius:7, background:'linear-gradient(135deg,#e60028,#6366f1)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:'#fff' }}>⬡</div>
+            <div style={{ width:28, height:28, borderRadius:7, background:'linear-gradient(135deg,#e8243b,#c4001a)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:'#fff' }}>⬡</div>
             <span style={{ fontSize:13, fontWeight:700, color:C.text }}>Ops<span style={{ color:'#e60028' }}>Board</span></span>
           </div>
           <nav style={{ display:'flex', gap:2, flex:1, overflowX:'auto' }}>
