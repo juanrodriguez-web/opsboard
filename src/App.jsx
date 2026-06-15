@@ -2269,17 +2269,6 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
         prioridad: ePrio,
       })
     }
-    // Notify if propietario was just assigned or changed
-    const prevProp = norm(item.propietario || '')
-    const newProp  = norm(eProp.trim())
-    if (newProp && newProp !== prevProp) {
-      notifyAssignment({
-        tema: eTema.trim(), propietario: eProp.trim(),
-        descripcion: eObj.trim(),
-        categoria: CATS.find(c => c.id === eCat)?.label || eCat,
-        prioridad: ePrio,
-      })
-    }
   }
 
   const agregarComentario = () => {
