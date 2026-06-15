@@ -102,8 +102,8 @@ const useW = () => {
   return w
 }
 
-const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def } catch { return def } }
-const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); const r = v ? JSON.parse(v) : def; if (k === 'obs-local-items') console.log('[LS] read', k, Array.isArray(r) ? r.length + ' items' : r); return r } catch(e) { console.error('[LS] ERROR reading', k, e); return def } }
+const lsSet = (k, v) => { try { const s = JSON.stringify(v); localStorage.setItem(k, s); if (k === 'obs-local-items') console.log('[LS] saved', k, JSON.parse(s).length, 'items') } catch(e) { console.error('[LS] ERROR saving', k, e) } }
 
 const getOverrides = ()          => lsGet(OV_KEY, {})
 const saveOverride     = (k, fields)     => { const ov = getOverrides(); ov[k] = { ...(ov[k]||{}), ...fields, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
