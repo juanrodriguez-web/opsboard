@@ -60,6 +60,11 @@ module.exports = async function handler(req, res) {
     </div>
   `
 
+  // Use custom from if set, otherwise Resend test domain (only works sending to account owner email)
+  const fromAddr = process.env.RESEND_FROM || 'OpsBoard <onboarding@resend.dev>'
+
+  console.log(`[notify] Sending to ${to} from ${fromAddr} | tema: ${tema}`)
+
   try {
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -68,21 +73,24 @@ module.exports = async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from:    'OpsBoard <onboarding@resend.dev>',
+        from:    fromAddr,
         to:      [to],
         subject: `📋 Tarea asignada: ${tema}`,
         html,
       }),
     })
 
-    const data = await resp.json()
+    const text = await resp.text()
+    let data
+    try { data = JSON.parse(text) } catch { data = { raw: text } }
+
     if (!resp.ok) {
-      console.error('[notify] Resend error:', data)
-      return res.status(502).json({ error: data })
+      console.error('[notify] Resend error:', resp.status, JSON.stringify(data))
+      return res.status(502).json({ error: data, status: resp.status })
     }
 
-    console.log(`[notify] Email sent to ${to} for tema: ${tema}`)
-    res.status(200).json({ ok: true, to })
+    console.log(`[notify] ✓ Email sent to ${to} | id: ${data.id}`)
+    res.status(200).json({ ok: true, to, id: data.id })
   } catch (err) {
     console.error('[notify] fetch error:', err.message)
     res.status(500).json({ error: err.message })

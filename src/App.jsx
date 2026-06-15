@@ -25,7 +25,7 @@ const RK = [
 ]
 const ST_TO_SHEET = {
   pending:'No iniciado', inprogress:'Según lo planificado',
-  blocked:'En peligro',  done:'Hecho', backlog:'No iniciado',
+  blocked:'En peligro',  done:'Hecho',
 }
 const C = {
   bg:'#f5f3f0', surface:'#fafaf8', card:'#ffffff',
@@ -334,25 +334,15 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
           </span>
         )}
         {!isDone && (
-          <>
-            <button
-              title="Mover al Backlog"
-              onClick={e => { e.stopPropagation(); onNextSt(item.id, 'backlog') }}
-              style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#94a3b8', fontSize:11, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease', fontWeight:700 }}
-              onMouseEnter={e => { e.currentTarget.style.background='#f1f5f9'; e.currentTarget.style.borderColor='#94a3b8'; e.currentTarget.style.color='#475569' }}
-              onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#94a3b8' }}>
-              ⊟
-            </button>
-            <button
-              title={`Avanzar a: ${nextSt.label}`}
-              aria-label={`Cambiar estado a ${nextSt.label}`}
-              onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
-              style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#6b6862', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
-              onMouseEnter={e => { e.currentTarget.style.background=C.accent; e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color='#fff' }}
-              onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#6b6862' }}>
-              →
-            </button>
-          </>
+          <button
+            title={`Avanzar a: ${nextSt.label}`}
+            aria-label={`Cambiar estado a ${nextSt.label}`}
+            onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
+            style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#6b6862', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background=C.accent; e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color='#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#6b6862' }}>
+            →
+          </button>
         )}
       </div>
     </div>
@@ -408,13 +398,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
   const w = useW()
   const kanbanCols = w >= 1024 ? 'repeat(4,1fr)' : w >= 640 ? 'repeat(2,1fr)' : 'repeat(1,1fr)'
 
-  const backlogItems = items.filter(i => i.status === 'backlog')
-  const [backlogOpen, setBacklogOpen] = useState(true)
-  const [activarId,   setActivarId]   = useState(null)
-  const [activarSt,   setActivarSt]   = useState('pending')
-
   const f = items
-    .filter(i => i.status !== 'backlog')
     .filter(i => catF==='all'||i.category===catF)
     .filter(i => asF==='all'||norm(i.propietario)===norm(asF))
     .filter(i => priF==='all'||i.prioridad===priF)
@@ -561,62 +545,6 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
               </div>
             )
           })}
-        </div>
-      )}
-
-      {/* ── Backlog section ── */}
-      {backlogItems.length > 0 && (
-        <div style={{ marginTop:20, border:`1px solid #cbd5e1`, borderRadius:10, overflow:'hidden' }}>
-          <div
-            onClick={() => setBacklogOpen(p => !p)}
-            style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'#f8fafc', cursor:'pointer', userSelect:'none' }}>
-            <span style={{ fontSize:13, color:'#94a3b8', transition:'transform .2s', display:'inline-block', transform: backlogOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-            <span style={{ fontSize:12, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'.06em' }}>Backlog</span>
-            <span style={{ fontSize:11, background:'#e2e8f0', color:'#64748b', borderRadius:10, padding:'1px 8px', fontWeight:600 }}>{backlogItems.length}</span>
-            <span style={{ fontSize:11, color:'#94a3b8', marginLeft:4 }}>temas en espera · no son prioridad ahora</span>
-          </div>
-          {backlogOpen && (
-            <div style={{ padding:'10px 14px 14px', display:'flex', flexDirection:'column', gap:6 }}>
-              {backlogItems.map(item => {
-                const cat = CATS.find(c => c.id === item.category)
-                const pc  = priColor(item.prioridad)
-                const oc  = ownerColor(item.propietario)
-                const isActivating = activarId === item.id
-                return (
-                  <div key={item.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'#fff', borderRadius:8, border:'1px solid #e2e8f0' }}>
-                    <span style={{ width:6, height:6, borderRadius:'50%', background:cat?.color||C.muted, flexShrink:0 }} />
-                    <span style={{ flex:1, fontSize:12, color:'#334155', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.tema}</span>
-                    {item.prioridad && <span style={{ fontSize:10, fontWeight:700, padding:'1px 5px', borderRadius:4, background:pc.bg, color:pc.color }}>{item.prioridad}</span>}
-                    <span style={{ fontSize:11, color:C.muted }}>{(item.propietario||'').split(' ')[0]||'—'}</span>
-                    {isActivating ? (
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
-                        <select value={activarSt} onChange={e => setActivarSt(e.target.value)}
-                          style={{ fontSize:11, padding:'3px 6px', borderRadius:5, border:'1px solid #cbd5e1', background:'#fff', color:'#334155', cursor:'pointer' }}>
-                          {ST.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                        </select>
-                        <button
-                          onClick={e => { e.stopPropagation(); onNextSt(item.id, activarSt); setActivarId(null) }}
-                          style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:C.accent, color:'#fff', border:'none', cursor:'pointer', fontWeight:600 }}>
-                          Activar
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); setActivarId(null) }}
-                          style={{ fontSize:11, padding:'3px 8px', borderRadius:5, background:'none', color:C.muted, border:'1px solid #e2e8f0', cursor:'pointer' }}>
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={e => { e.stopPropagation(); setActivarId(item.id); setActivarSt('pending') }}
-                        style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', cursor:'pointer', fontWeight:600, whiteSpace:'nowrap' }}>
-                        ↑ Activar
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
         </div>
       )}
 
@@ -2443,7 +2371,6 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                   <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Estado</div>
                   <select value={eSt} onChange={e=>setESt(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
                     {ST.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                    <option value="backlog">Backlog</option>
                   </select>
                 </div>
                 <div>
@@ -2506,25 +2433,35 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
             )}
 
             {/* Subtareas */}
-            {item.subtareas?.length > 0 && (
-              <div style={{ marginBottom:14 }}>
-                <Lbl>Subtareas ({item.subtareas.length})</Lbl>
-                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                  {item.subtareas.map((st, i) => {
-                    const ss = ST.find(s => s.id === st.status)
-                    return (
-                      <div key={i} style={{ display:'flex', alignItems:'center', gap:8,
-                        background:C.card, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px' }}>
-                        <div style={{ width:6, height:6, borderRadius:'50%', background:ss?.color||C.muted, flexShrink:0 }} />
-                        <span style={{ fontSize:12, color:C.text, flex:1 }}>{st.title}</span>
-                        {st.prop && <span style={{ fontSize:10, color:C.muted }}>{st.prop.split(' ')[0]}</span>}
-                        {st.fechaFin && <span style={{ fontSize:10, color:C.muted }}>{fmtFecha(fdStr(st.fechaFin))}</span>}
-                      </div>
-                    )
-                  })}
-                </div>
+            <div style={{ marginBottom:14 }}>
+              <Lbl>Subtareas ({subtareas.length})</Lbl>
+              <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:6 }}>
+                {subtareas.map(sub => {
+                  const done = sub.status === 'done'
+                  return (
+                    <div key={sub.id} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px' }}>
+                      <button
+                        onClick={() => setSubtareas(prev => prev.map(s => s.id===sub.id ? {...s, status: done?'pending':'done'} : s))}
+                        style={{ width:16, height:16, borderRadius:4, border:`2px solid ${done?'#10b981':C.border}`, background: done?'#10b981':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>
+                        {done && <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>✓</span>}
+                      </button>
+                      <span style={{ fontSize:12, flex:1, color: done?C.muted:C.text, textDecoration: done?'line-through':'none' }}>{sub.title}</span>
+                      {sub.prop && <span style={{ fontSize:10, color:C.muted }}>{sub.prop.split(' ')[0]}</span>}
+                      <button onClick={() => setSubtareas(prev => prev.filter(s => s.id !== sub.id))}
+                        style={{ background:'none', border:'none', color:'#fca5a5', cursor:'pointer', fontSize:14, lineHeight:1, padding:'0 2px', flexShrink:0 }}>✕</button>
+                    </div>
+                  )
+                })}
               </div>
-            )}
+              <div style={{ display:'flex', gap:6 }}>
+                <input value={newSub} onChange={e => setNewSub(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newSub.trim()) { setSubtareas(prev => [...prev, { id:uid(), title:newSub.trim(), status:'pending', prop:'', risk:'green', fechaFin:null, notas:'' }]); setNewSub('') }}}
+                  placeholder="Nueva subtarea… (Enter para añadir)"
+                  style={{ flex:1, background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px', fontSize:12, outline:'none' }} />
+                <button onClick={() => { if (!newSub.trim()) return; setSubtareas(prev => [...prev, { id:uid(), title:newSub.trim(), status:'pending', prop:'', risk:'green', fechaFin:null, notas:'' }]); setNewSub('') }}
+                  style={{ padding:'6px 12px', borderRadius:6, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:'pointer', fontWeight:600 }}>+ Add</button>
+              </div>
+            </div>
 
             {/* Comments */}
             <div>
@@ -2730,4 +2667,99 @@ export default function OpsBoard() {
           })}
         </nav>
 
-        {/* Bottom: 
+        {/* Bottom: lang toggle + last update + refresh */}
+        <div style={{ padding:'12px 14px 16px', borderTop:`1px solid ${C.border}` }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <div style={{ display:'flex', border:`1px solid ${C.border}`, borderRadius:6, overflow:'hidden', flex:1 }}>
+              {['es','en'].map(l => (
+                <button key={l} onClick={() => setLang(l)}
+                  style={{ flex:1, padding:'4px 0', background:lang===l?C.accent:'transparent', color:lang===l?'#fff':'#9b978f',
+                    border:'none', cursor:'pointer', fontWeight:lang===l?700:400, textTransform:'uppercase', fontSize:10, letterSpacing:'.04em' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {lastUpd && (
+              <span style={{ fontSize:10, color:'#9b978f', fontFamily:"'Geist Mono',monospace" }}>
+                {pad(lastUpd.getHours())}:{pad(lastUpd.getMinutes())}
+              </span>
+            )}
+            <button onClick={loadData} disabled={loading} title="Actualizar datos"
+              style={{ background:'none', border:`1px solid ${C.border}`, color:'#9b978f', borderRadius:6, padding:'4px 9px', fontSize:12, cursor:'pointer', lineHeight:1 }}>
+              {loading ? '⏳' : '↺'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main column ──────────────────────────────────────────────────── */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+        {/* Topbar */}
+        <div style={{ height:56, background:'#fff', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', padding:'0 24px', gap:16, flexShrink:0 }}>
+          <h1 style={{ flex:1, fontSize:14, fontWeight:600, color:C.text, letterSpacing:'-.005em', margin:0 }}>
+            {VIEW_LABELS[vista] || vista}
+          </h1>
+          {vista === 'Tablero' && (
+            <button onClick={() => setShowNuevo(true)}
+              style={{ padding:'7px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms' }}
+              onMouseEnter={e => e.currentTarget.style.background='#d41c2f'}
+              onMouseLeave={e => e.currentTarget.style.background=C.accent}>
+              + Nuevo tema
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1, overflow:'auto', padding:24 }}>
+          {loading && (
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:280, gap:12, color:C.muted }}>
+              <div style={{ width:32, height:32, borderRadius:'50%', border:`3px solid ${C.border}`, borderTopColor:C.accent, animation:'spin .8s linear infinite' }} />
+              <span style={{ fontSize:13 }}>Cargando desde Seguimiento…</span>
+            </div>
+          )}
+          {!loading && error && (
+            <div style={{ marginTop:40, textAlign:'center', color:'#f43f5e' }}>
+              <p style={{ fontWeight:700, marginBottom:8 }}>⚠️ Error cargando datos</p>
+              <p style={{ fontSize:12, color:C.muted, marginBottom:16 }}>{error}</p>
+              <Btn onClick={loadData}>Reintentar</Btn>
+            </div>
+          )}
+          {!loading && !error && (
+            <>
+              {vista === 'Tablero' && (
+                <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
+                  owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
+                  onNuevo={() => setShowNuevo(true)} />
+              )}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
+              {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
+              {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
+              {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
+              {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
+              {vista === '⧆ Histórico'        && <Historico items={allItems} />}
+            </>
+          )}
+        </div>
+      </div>
+
+      {showNuevo && (
+        <NuevoTema
+          onAdd={addLocalItem}
+          onClose={() => setShowNuevo(false)}
+          proyectoNames={proyectos.map(p => p.nombre)} />
+      )}
+      {itemActivo && (
+        <ModalItem item={itemActivo} onClose={() => setItemActivo(null)}
+          onItemChange={(id, fields, keepOpen = false) => {
+            onItemChange(id, fields)
+            if (keepOpen) setItemActivo(prev => prev && prev.id===id ? { ...prev, ...fields } : prev)
+            else setItemActivo(null)
+          }}
+          proyectoNames={proyectos.map(p => p.nombre)}
+          onToast={msg => setToast(msg)} />
+      )}
+      {toast && <Toast msg={toast} onHide={() => setToast(null)} />}
+    </div>
+  )
+}
