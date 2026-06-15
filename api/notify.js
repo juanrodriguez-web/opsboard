@@ -2,7 +2,7 @@
 // Env vars required: RESEND_API_KEY
 
 const OWNER_EMAILS = {
-  'juan rodriguez peisel': 'juangas50@gmail.com',
+  'juan rodriguez peisel': 'juan.rodriguez@sercomsoluciones.es',
   'francisco toledo':      'francisco.toledo@sercomsoluciones.es',
 }
 
