@@ -2584,8 +2584,8 @@ export default function OpsBoard() {
       body: JSON.stringify({ items: newItems }),
     })
       .then(r => { if (!r.ok) return r.text().then(t => { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,200)) }); return r.json() })
-      .then(d => console.log('[append] OK →', d.sheet, '| synced:', d.appended, 'items'))
-      .catch(e => console.error('[append] FAILED:', e.message))
+      .then(d => { setToast('✓ ' + d.appended + ' tarea(s) guardada(s) en Sheet') })
+      .catch(e => { setToast('⚠ Error al guardar en Sheet: ' + e.message) })
   }
   const addLocalItem = item => addLocalItems([item])
 
