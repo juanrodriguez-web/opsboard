@@ -2721,7 +2721,6 @@ export default function OpsBoard() {
               </button>
             )
           })()}
-          </div>
         </div>
       </div>
 
