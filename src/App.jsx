@@ -1680,19 +1680,64 @@ const Reporte = ({ items, proyectos=[], lang='es' }) => {
   const [copied, setCopied] = useState(false)
   const [rpTab, setRpTab]   = useState('tracking')
 
-  const MONTHS_ES = ['abr-26','may-26','jun-26','jul-26','ago-26','sep-26','oct-26','nov-26','dic-26','ene-27','feb-27','mar-27']
-  const MONTHS_EN = ['Apr-26','May-26','Jun-26','Jul-26','Aug-26','Sep-26','Oct-26','Nov-26','Dec-26','Jan-27','Feb-27','Mar-27']
-  const MONTHS    = lang==='en' ? MONTHS_EN : MONTHS_ES
-  const MONTH_STARTS = [
-    new Date(2026,3,1),new Date(2026,4,1),new Date(2026,5,1),new Date(2026,6,1),
-    new Date(2026,7,1),new Date(2026,8,1),new Date(2026,9,1),new Date(2026,10,1),
-    new Date(2026,11,1),new Date(2027,0,1),new Date(2027,1,1),new Date(2027,2,1),
-  ]
-  const MONTH_ENDS = MONTH_STARTS.map((_,i) => { const n=MONTH_STARTS[i+1]||new Date(2027,3,1); return new Date(n-1) })
-  const monthActive = (p,mi) => {
-    if(!p.fechaFin) return false
-    const s=p.fechaInicio?new Date(fdStr(p.fechaInicio)):new Date(fdStr(p.fechaFin)), e=new Date(fdStr(p.fechaFin))
-    return s<=MONTH_ENDS[mi] && e>=MONTH_STARTS[mi]
+  // Convert any date value (Date object OR "YYYY-MM-DD" string OR "DD/MM/YYYY" string) to a local midnight Date
+  const toLocalDate = d => {
+    if (!d) return null
+    if (d instanceof Date) {
+      // Re-create using local Y/M/D to avoid UTC timezone shift from toISOString()
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    }
+    const s = String(d).trim()
+    // YYYY-MM-DD (from date inputs / localStorage overrides)
+    const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+    if (iso) return new Date(+iso[1], +iso[2]-1, +iso[3])
+    // DD/MM/YYYY (from sheet FORMATTED_VALUE)
+    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+    if (dmy) return new Date(+dmy[3], +dmy[2]-1, +dmy[1])
+    return null
+  }
+
+  // Build MONTH_STARTS dynamically from actual project date range so the Gantt
+  // always covers whatever dates the projects have (not a hardcoded 12-month window)
+  const ganttRange = (() => {
+    const dates = proyectos.flatMap(p => [toLocalDate(p.fechaInicio), toLocalDate(p.fechaFin)]).filter(Boolean)
+    if (!dates.length) {
+      // fallback: current year ± 6 months
+      const now = new Date()
+      return { y0: now.getFullYear(), m0: 0, y1: now.getFullYear()+1, m1: 11 }
+    }
+    const minD = new Date(Math.min(...dates))
+    const maxD = new Date(Math.max(...dates))
+    return { y0: minD.getFullYear(), m0: minD.getMonth(), y1: maxD.getFullYear(), m1: maxD.getMonth() }
+  })()
+
+  // Generate one entry per month spanning the range
+  const MONTH_STARTS = (() => {
+    const res = []
+    let y = ganttRange.y0, m = ganttRange.m0
+    while (y < ganttRange.y1 || (y === ganttRange.y1 && m <= ganttRange.m1)) {
+      res.push(new Date(y, m, 1))
+      m++; if (m > 11) { m = 0; y++ }
+      if (res.length > 36) break // safety cap: max 3 years
+    }
+    return res
+  })()
+  const MONTH_ENDS = MONTH_STARTS.map((_,i) => {
+    const n = MONTH_STARTS[i+1] || new Date(ganttRange.y1, ganttRange.m1+1, 1)
+    return new Date(n-1)
+  })
+  const MONTHS_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+  const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const MONTHS = MONTH_STARTS.map(d => {
+    const mo = lang==='en' ? MONTHS_EN[d.getMonth()] : MONTHS_ES[d.getMonth()]
+    return `${mo}-${String(d.getFullYear()).slice(2)}`
+  })
+
+  const monthActive = (p, mi) => {
+    const e = toLocalDate(p.fechaFin)
+    if (!e || isNaN(e)) return false
+    const s = toLocalDate(p.fechaInicio) || e
+    return s <= MONTH_ENDS[mi] && e >= MONTH_STARTS[mi]
   }
   const VF='#e8001c', SC='#1a5fe3'
   const barCol = p => norm(p.desarrollo||'')==='sercom' ? SC : VF

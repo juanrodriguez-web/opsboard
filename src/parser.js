@@ -44,8 +44,13 @@ export const inferCat = (tema, obj = '') => {
 export const parseFecha = s => {
   if (!s || s.trim() === '') return null
   s = s.trim()
+  // YYYY-MM-DD (from <input type="date"> / localStorage overrides) — must come first
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3])
+  // DD/MM/YYYY (from Google Sheets FORMATTED_VALUE in ES locale)
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (m) return new Date(+m[3], +m[2] - 1, +m[1])
+  // Excel serial number
   const n = Number(s)
   if (!isNaN(n) && n > 40000 && n < 60000)
     return new Date(Date.UTC(1899, 11, 30) + n * 86400000)
