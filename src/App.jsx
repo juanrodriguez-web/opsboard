@@ -162,6 +162,20 @@ async function apiUpdate(tema, fields = {}) {
   })
 }
 
+// Fire-and-forget email notification when a task is assigned to Juan or Fran
+async function notifyAssignment({ tema, propietario, descripcion = '', categoria = '', prioridad = '' }) {
+  if (!propietario) return
+  try {
+    await fetch('/api/notify', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ tema, propietario, descripcion, categoria, prioridad }),
+    })
+  } catch (e) {
+    console.warn('[notify] Error:', e.message)
+  }
+}
+
 async function callClaude(body) {
   const res  = await fetch('/api/claude', {
     method:  'POST',
@@ -2106,7 +2120,7 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
 
   const crear = () => {
     if (!tema.trim()) return
-    onAdd({
+    const newItem = {
       id: uid(), tema: tema.trim(), objetivo: obj.trim(),
       category: cat, propietario: prop.trim(),
       prioridad: prio, risk: mapRisk(prio),
@@ -2114,6 +2128,14 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
       fechaInicio: null, fechaFin: null,
       archivos: '', notas: '', proyecto: proy,
       subtareas: [], _local: true,
+    }
+    onAdd(newItem)
+    // Notify assigned user (fire-and-forget)
+    if (prop.trim()) notifyAssignment({
+      tema: newItem.tema, propietario: prop.trim(),
+      descripcion: obj.trim(),
+      categoria: CATS.find(c => c.id === cat)?.label || cat,
+      prioridad: prio,
     })
     onClose()
   }
@@ -2235,6 +2257,17 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
     onItemChange(item.id, fields, true)
     setEditing(false)
     onToast?.('Cambios guardados')
+    // Notify if propietario was just assigned or changed
+    const prevProp = norm(item.propietario || '')
+    const newProp  = norm(eProp.trim())
+    if (newProp && newProp !== prevProp) {
+      notifyAssignment({
+        tema: eTema.trim(), propietario: eProp.trim(),
+        descripcion: eObj.trim(),
+        categoria: CATS.find(c => c.id === eCat)?.label || eCat,
+        prioridad: ePrio,
+      })
+    }
   }
 
   const agregarComentario = () => {
