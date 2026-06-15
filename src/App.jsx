@@ -2589,8 +2589,9 @@ export default function OpsBoard() {
       body: JSON.stringify({ items: newItems }),
     })
       .then(r => r.json())
-      .then(d => { if (d.ok) console.log('[append] synced', d.appended, 'items to Sheet →', d.sheet) })
-      .catch(e => console.warn('[append] could not sync to Sheet:', e.message))
+      .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d)))
+      .then(d => { if (d.ok) console.log('[append] synced', d.appended, 'items to Sheet →', d.sheet); else console.error('[append] failed:', d.error) })
+      .catch(e => console.error('[append] ERROR:', e?.error || e?.message || e))
   }
   const addLocalItem = item => addLocalItems([item])
 
