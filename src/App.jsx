@@ -102,8 +102,8 @@ const useW = () => {
   return w
 }
 
-const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); const r = v ? JSON.parse(v) : def; if (k === 'obs-local-items') console.log('[LS] read', k, Array.isArray(r) ? r.length + ' items' : r); return r } catch(e) { console.error('[LS] ERROR reading', k, e); return def } }
-const lsSet = (k, v) => { try { const s = JSON.stringify(v); localStorage.setItem(k, s); if (k === 'obs-local-items') console.log('[LS] saved', k, JSON.parse(s).length, 'items') } catch(e) { console.error('[LS] ERROR saving', k, e) } }
+const lsGet = (k, def = null) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def } catch { return def } }
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
 
 const getOverrides = ()          => lsGet(OV_KEY, {})
 const saveOverride     = (k, fields)     => { const ov = getOverrides(); ov[k] = { ...(ov[k]||{}), ...fields, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
@@ -2557,6 +2557,13 @@ export default function OpsBoard() {
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
       setLastUpd(new Date())
+      // Remove localItems that are now in the sheet (synced) — avoid duplicates
+      setLocalItems(prev => {
+        const fetchedNorms = new Set(fetched.map(i => norm(i.tema)))
+        const filtered = prev.filter(li => !fetchedNorms.has(norm(li.tema)))
+        lsSet(LOCAL_ITEMS_KEY, filtered)
+        return filtered
+      })
     } catch (e) {
       setError(e.message || String(e))
     }
@@ -2568,13 +2575,22 @@ export default function OpsBoard() {
   // Persist local items so they survive page reloads
   useEffect(() => { lsSet(LOCAL_ITEMS_KEY, localItems) }, [localItems])
 
-  // Synchronous helper — saves immediately without relying on effect timing
+  // Add items to local state AND persist to Google Sheet (primary) + localStorage (fallback)
   const addLocalItems = newItems => {
     setLocalItems(prev => {
       const updated = [...prev, ...newItems]
-      lsSet(LOCAL_ITEMS_KEY, updated)   // save NOW, not after next render
+      lsSet(LOCAL_ITEMS_KEY, updated)
       return updated
     })
+    // Write to Sheet — items will survive any reload once synced
+    fetch('/api/append', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: newItems }),
+    })
+      .then(r => r.json())
+      .then(d => { if (d.ok) console.log('[append] synced', d.appended, 'items to Sheet →', d.sheet) })
+      .catch(e => console.warn('[append] could not sync to Sheet:', e.message))
   }
   const addLocalItem = item => addLocalItems([item])
 
