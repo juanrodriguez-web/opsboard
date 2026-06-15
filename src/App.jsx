@@ -36,6 +36,7 @@ const COMMENTS_KEY     = 'obs-comments'
 const PROJ_COMMENTS_KEY = 'obs-proj-comments'
 const PROY_OV_KEY       = 'obs-proy-overrides'
 const DONE_TS_KEY       = id => `obs-done-ts-${id}`
+const LOCAL_ITEMS_KEY  = 'obs-local-items'
 
 // Owner colors
 const OWN_COLORS = {
@@ -160,6 +161,20 @@ async function apiUpdate(tema, fields = {}) {
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ tema, ...fields }),
   })
+}
+
+// Fire-and-forget email notification when a task is assigned to Juan or Fran
+async function notifyAssignment({ tema, propietario, descripcion = '', categoria = '', prioridad = '' }) {
+  if (!propietario) return
+  try {
+    await fetch('/api/notify', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ tema, propietario, descripcion, categoria, prioridad }),
+    })
+  } catch (e) {
+    console.warn('[notify] Error:', e.message)
+  }
 }
 
 // Fire-and-forget email notification when a task is assigned to Juan or Fran
@@ -2268,6 +2283,17 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
         prioridad: ePrio,
       })
     }
+    // Notify if propietario was just assigned or changed
+    const prevProp = norm(item.propietario || '')
+    const newProp  = norm(eProp.trim())
+    if (newProp && newProp !== prevProp) {
+      notifyAssignment({
+        tema: eTema.trim(), propietario: eProp.trim(),
+        descripcion: eObj.trim(),
+        categoria: CATS.find(c => c.id === eCat)?.label || eCat,
+        prioridad: ePrio,
+      })
+    }
   }
 
   const agregarComentario = () => {
@@ -2501,7 +2527,15 @@ export default function OpsBoard() {
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
   const [proyectos,   setProyectos]  = useState([])
-  const [localItems,  setLocalItems] = useState([])
+  const [localItems,  setLocalItems] = useState(() => {
+    // Rehydrate from localStorage — revive fechaFin/fechaInicio strings back to Date objects
+    const saved = lsGet(LOCAL_ITEMS_KEY, [])
+    return saved.map(i => ({
+      ...i,
+      fechaInicio: i.fechaInicio ? new Date(i.fechaInicio) : null,
+      fechaFin:    i.fechaFin    ? new Date(i.fechaFin)    : null,
+    }))
+  })
   const [loading,     setLoading]    = useState(true)
   const [error,       setError]      = useState(null)
   const [lastUpd,     setLastUpd]    = useState(null)
@@ -2531,8 +2565,13 @@ export default function OpsBoard() {
 
   useEffect(() => { loadData() }, [])
 
-  const onItemChange = (id, fields) =>
+  // Persist local items so they survive page reloads
+  useEffect(() => { lsSet(LOCAL_ITEMS_KEY, localItems) }, [localItems])
+
+  const onItemChange = (id, fields) => {
     setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
+    setLocalItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
+  }
 
   const onNextSt = async (id, newSt) => {
     const item = allItems.find(i => i.id===id)
