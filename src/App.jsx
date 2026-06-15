@@ -1594,7 +1594,28 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
 }
 
 // ── IA Intake ─────────────────────────────────────────────────────────────────
-const IAIntake = ({ onAdd }) => {
+// Fuzzy title similarity (client-side, zero API cost)
+const _tokensOf = s => s.toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9 ]/g, ' ')
+  .split(/\s+/).filter(w => w.length > 3)
+
+const _similarity = (a, b) => {
+  const ta = new Set(_tokensOf(a)), tb = _tokensOf(b)
+  if (!ta.size || !tb.length) return 0
+  return tb.filter(w => ta.has(w)).length / Math.max(ta.size, tb.length)
+}
+
+const findSimilar = (title, existingItems) =>
+  existingItems
+    .filter(i => i.status !== 'done' && !i._deleted)
+    .map(i => ({ item:i, score:_similarity(title, i.tema) }))
+    .filter(x => x.score >= 0.38)
+    .sort((a,b) => b.score - a.score)
+    .slice(0, 2)
+    .map(x => x.item)
+
+const IAIntake = ({ onAdd, allItems = [] }) => {
   const [txt, setTxt]         = useState('')
   const [busy, setBusy]       = useState(false)
   const [pending, setPending] = useState(null)
@@ -1604,27 +1625,35 @@ const IAIntake = ({ onAdd }) => {
     if (!txt.trim()) return
     setBusy(true); setErr(''); setPending(null)
     try {
+      const inputText = txt.length > 4000 ? txt.slice(0, 4000) + '\n[texto truncado]' : txt
       const raw = await callClaude({
-        model:'claude-haiku-4-5-20251001', max_tokens:2500,
-        system:'Extrae tareas del texto. Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional ni bloques de código markdown. Formato exacto:\n{"items":[{"category":"projects|product|tools|cvm","title":"string","description":"string","subtasks":["string"],"risk":"green|yellow|red","endDate":"YYYY-MM-DD or null"}]}',
-        messages:[{ role:'user', content:txt }],
+        model:'claude-haiku-4-5-20251001', max_tokens:4096,
+        system:'Extrae tareas del texto. Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional ni bloques de código markdown. Máximo 10 items y 4 subtareas por item. Sé conciso en los textos. Formato exacto:\n{"items":[{"category":"projects|product|tools|cvm","title":"string","description":"string (max 120 chars)","subtasks":["string"],"risk":"green|yellow|red","endDate":"YYYY-MM-DD or null"}]}',
+        messages:[{ role:'user', content:inputText }],
       })
-      // Extract JSON: find first { and last }
       if (!raw.trim()) { setErr('La API devolvió una respuesta vacía. Comprueba la CLAUDE_API_KEY en Vercel.'); setBusy(false); return }
-      const start = raw.indexOf('{')
-      const end   = raw.lastIndexOf('}')
+      const start = raw.indexOf('{'), end = raw.lastIndexOf('}')
       const clean = start !== -1 && end !== -1 ? raw.slice(start, end + 1) : raw.trim()
       let p
       try { p = JSON.parse(clean) }
       catch(e) { setErr(`JSON inválido: ${e.message}\n\nRespuesta (primeros 400 chars):\n${raw.slice(0,400)}`); setBusy(false); return }
       if (!p.items?.length) { setErr('La IA no detectó tareas en el texto. Prueba con un texto más descriptivo.'); setBusy(false); return }
-      setPending((p.items||[]).map(i => ({ ...i, assignee:'' })))
+      setPending((p.items||[]).map(i => ({
+        ...i, assignee:'',
+        similar: findSimilar(i.title, allItems),
+        skip: false,
+      })))
     } catch(e) { setErr(`Error llamando a la API: ${e.message}`) }
     setBusy(false)
   }
 
+  const toggleSkip = idx =>
+    setPending(prev => prev.map((it,i) => i===idx ? {...it, skip:!it.skip} : it))
+
   const confirmar = () => {
-    const ni = pending.map(ai => ({
+    const toAdd = pending.filter(ai => !ai.skip)
+    if (!toAdd.length) { setPending(null); return }
+    const ni = toAdd.map(ai => ({
       id:uid(), category:ai.category||'projects', tema:ai.title,
       objetivo:ai.description||'', propietario:'', status:'pending',
       estadoSheet:'No iniciado', risk:ai.risk||'green', prioridad:'',
@@ -1636,6 +1665,10 @@ const IAIntake = ({ onAdd }) => {
     onAdd(ni); setTxt(''); setPending(null)
   }
 
+  const dupCount  = pending?.filter(i => i.similar?.length > 0).length || 0
+  const skipCount = pending?.filter(i => i.skip).length || 0
+  const addCount  = (pending?.length || 0) - skipCount
+
   return (
     <div style={{ paddingTop:16, maxWidth:760 }}>
       <h2 style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>✨ IA Intake</h2>
@@ -1645,26 +1678,70 @@ const IAIntake = ({ onAdd }) => {
         <Btn onClick={run} disabled={busy||!txt.trim()}>{busy?'⏳ Analizando…':'✨ Detectar tareas'}</Btn>
         {txt && <Btn v="sec" onClick={() => { setTxt(''); setPending(null) }}>Limpiar</Btn>}
       </div>
-      {err && <div style={{ color:'#f43f5e', fontSize:13, marginBottom:12 }}>{err}</div>}
+      {err && <div style={{ color:'#f43f5e', fontSize:13, marginBottom:12, whiteSpace:'pre-wrap' }}>{err}</div>}
       {pending && (
         <div>
-          <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:12 }}>{pending.length} tarea{pending.length!==1?'s':''} detectada{pending.length!==1?'s':''}:</div>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:700, color:C.muted }}>
+              {pending.length} tarea{pending.length!==1?'s':''} detectada{pending.length!==1?'s':''}
+            </span>
+            {dupCount > 0 && (
+              <span style={{ fontSize:11, color:'#92400e', background:'#fef3c7', border:'1px solid #fde68a', borderRadius:5, padding:'1px 7px', fontWeight:600 }}>
+                ⚠ {dupCount} posible{dupCount!==1?'s':''} duplicado{dupCount!==1?'s':''}
+              </span>
+            )}
+          </div>
           {pending.map((item,idx) => {
-            const cat = CATS.find(c => c.id === item.category)
+            const cat    = CATS.find(c => c.id === item.category)
+            const hasDup = item.similar?.length > 0
+            const bdColor = item.skip ? '#d1d5db' : hasDup ? '#fbbf24' : (cat?.color || C.muted)
             return (
-              <div key={idx} style={{ background:C.card, borderLeft:`3px solid ${cat?.color||C.muted}`, borderRadius:8, padding:14, marginBottom:10, border:`1px solid ${C.border}` }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, flexWrap:'wrap' }}>
-                  <Tag id={item.category} type="cat" />
-                  <span style={{ fontSize:14, fontWeight:600, color:C.text, flex:1 }}>{item.title}</span>
-                  <Dot risk={item.risk} />
+              <div key={idx} style={{
+                background: item.skip ? C.surface : C.card,
+                borderLeft:`3px solid ${bdColor}`,
+                borderRadius:8, padding:14, marginBottom:8,
+                border:`1px solid ${item.skip ? '#e5e7eb' : hasDup ? '#fde68a' : C.border}`,
+                opacity: item.skip ? 0.45 : 1,
+                transition:'opacity 150ms',
+              }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:9 }}>
+                  <input type="checkbox" checked={!item.skip} onChange={() => toggleSkip(idx)}
+                    title={item.skip ? 'Incluir' : 'Omitir este item'}
+                    style={{ marginTop:2, cursor:'pointer', accentColor:C.accent, flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:4, flexWrap:'wrap' }}>
+                      <Tag id={item.category} type="cat" />
+                      <span style={{ fontSize:13.5, fontWeight:600, color: item.skip ? C.muted : C.text }}>{item.title}</span>
+                      <Dot risk={item.risk} />
+                    </div>
+                    {item.description && !item.skip && (
+                      <p style={{ fontSize:12, color:C.muted, margin:0, marginBottom: hasDup ? 6 : 0 }}>{item.description}</p>
+                    )}
+                    {hasDup && !item.skip && (
+                      <div style={{ display:'flex', alignItems:'flex-start', gap:5, marginTop:5,
+                        background:'#fffbeb', border:'1px solid #fde68a', borderRadius:5, padding:'5px 8px' }}>
+                        <span style={{ fontSize:12, flexShrink:0 }}>⚠</span>
+                        <div style={{ fontSize:11.5, color:'#92400e', lineHeight:1.4 }}>
+                          <span style={{ fontWeight:600 }}>Ya existe algo similar: </span>
+                          {item.similar.map((s,si) => (
+                            <span key={si}>
+                              <span style={{ fontStyle:'italic' }}>"{s.tema}"</span>
+                              <span style={{ color:'#b45309' }}> ({ST.find(st=>st.id===s.status)?.label||s.status})</span>
+                              {si < item.similar.length-1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {item.description && <p style={{ fontSize:12, color:C.muted }}>{item.description}</p>}
               </div>
             )
           })}
-          <div style={{ display:'flex', gap:8, marginTop:12 }}>
-            <Btn onClick={confirmar}>✓ Añadir al tablero</Btn>
+          <div style={{ display:'flex', gap:8, marginTop:14, alignItems:'center' }}>
+            <Btn onClick={confirmar} disabled={addCount===0}>✓ Añadir {addCount} al tablero</Btn>
             <Btn v="sec" onClick={() => setPending(null)}>Cancelar</Btn>
+            {skipCount > 0 && <span style={{ fontSize:11, color:C.muted }}>{skipCount} omitida{skipCount!==1?'s':''}</span>}
           </div>
         </div>
       )}
@@ -2580,7 +2657,7 @@ export default function OpsBoard() {
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
-              {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} />}
+              {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} allItems={allItems} />}
               {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
