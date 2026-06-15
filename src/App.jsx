@@ -177,20 +177,6 @@ async function notifyAssignment({ tema, propietario, descripcion = '', categoria
   }
 }
 
-// Fire-and-forget email notification when a task is assigned to Juan or Fran
-async function notifyAssignment({ tema, propietario, descripcion = '', categoria = '', prioridad = '' }) {
-  if (!propietario) return
-  try {
-    await fetch('/api/notify', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ tema, propietario, descripcion, categoria, prioridad }),
-    })
-  } catch (e) {
-    console.warn('[notify] Error:', e.message)
-  }
-}
-
 async function callClaude(body) {
   const res  = await fetch('/api/claude', {
     method:  'POST',
