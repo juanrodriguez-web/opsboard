@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from './lib/supabase.js'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -131,36 +132,54 @@ const saveProjectComment = (k, text) => {
   return item
 }
 
-function applyOverrides(items) {
-  const ov = getOverrides()
-  return items.map(item => {
-    const k = norm(item.tema)
-    const o = ov[k]
-    if (!o) return item
-    // Apply all stored overrides (status, propietario, prioridad, fechaFin, risk…)
-    const { ts, ...fields } = o
-    return { ...item, ...fields, _hasLocal: true }
-  })
+// ── Supabase helpers ─────────────────────────────────────────────────────────
+function dbToItem(row) {
+  return {
+    ...row,
+    estadoSheet: row.estado_sheet || 'No iniciado',
+    fechaInicio: row.fecha_inicio ? new Date(row.fecha_inicio) : null,
+    fechaFin:    row.fecha_fin    ? new Date(row.fecha_fin)    : null,
+    subtareas:   Array.isArray(row.subtareas) ? row.subtareas : [],
+  }
 }
+function itemToDb(item) {
+  return {
+    id:           item.id,
+    tema:         item.tema || '',
+    objetivo:     item.objetivo || '',
+    category:     item.category || 'projects',
+    propietario:  item.propietario || '',
+    prioridad:    item.prioridad || '',
+    risk:         item.risk || 'green',
+    status:       item.status || 'pending',
+    estado_sheet: item.estadoSheet || 'No iniciado',
+    fecha_inicio: item.fechaInicio instanceof Date ? item.fechaInicio.toISOString() : (item.fechaInicio || null),
+    fecha_fin:    item.fechaFin    instanceof Date ? item.fechaFin.toISOString()    : (item.fechaFin    || null),
+    archivos:     item.archivos || '',
+    notas:        item.notas || '',
+    proyecto:     item.proyecto || '',
+    subtareas:    item.subtareas || [],
+  }
+}
+function dbToProy(row) { return { ...row } }
 
-// ── API calls ────────────────────────────────────────────────────────────────
 async function fetchAll() {
-  const res = await fetch('/api/data')
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const { values } = await res.json()
-  const tables   = parseSheetValues(values)
-  const items    = applyOverrides(buildItems(tables))
-  const campanas = parseCampanas(tables)
-  const proyectos = parseProyectos(tables)
-  return { items, campanas, proyectos }
+  const [{ data: iData, error: e1 }, { data: pData, error: e2 }] = await Promise.all([
+    supabase.from('items').select('*').order('created_at', { ascending: false }),
+    supabase.from('proyectos').select('*').order('created_at', { ascending: false }),
+  ])
+  if (e1) throw new Error('items: ' + e1.message)
+  if (e2) throw new Error('proyectos: ' + e2.message)
+  return {
+    items:     (iData || []).map(dbToItem),
+    proyectos: (pData || []).map(dbToProy),
+    campanas:  [],
+  }
 }
 
-async function apiUpdate(tema, fields = {}) {
-  await fetch('/api/update', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ tema, ...fields }),
-  })
+async function sbUpdate(id, fields) {
+  const { error } = await supabase.from('items').update(fields).eq('id', id)
+  if (error) throw new Error(error.message)
 }
 
 // Fire-and-forget email notification when a task is assigned to Juan or Fran
@@ -2251,7 +2270,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
       proyecto:   eProy,
       category:   eCat,
     }
-    saveOverride(norm(item.tema), fields)
+    onItemChange(item.id, fields)
     if (eSt === 'done') saveDoneTs(item.id)
     const updated = { ...item, ...fields, _hasLocal: true }
     setItem(updated)
@@ -2491,7 +2510,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
           <button
             onClick={() => {
               if (!window.confirm('¿Eliminar este tema del tablero local?')) return
-              saveOverride(norm(item.tema), { status:'done', _deleted:true })
+              onItemChange(item.id, { status:'done', _deleted:true })
               onItemChange(item.id, { status:'done', _deleted:true })
               onClose()
             }}
@@ -2512,15 +2531,7 @@ export default function OpsBoard() {
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
   const [proyectos,   setProyectos]  = useState([])
-  const [localItems,  setLocalItems] = useState(() => {
-    // Rehydrate from localStorage — revive fechaFin/fechaInicio strings back to Date objects
-    const saved = lsGet(LOCAL_ITEMS_KEY, [])
-    return saved.map(i => ({
-      ...i,
-      fechaInicio: i.fechaInicio ? new Date(i.fechaInicio) : null,
-      fechaFin:    i.fechaFin    ? new Date(i.fechaFin)    : null,
-    }))
-  })
+  const realtimeSub = useRef(null)
   const [loading,     setLoading]    = useState(true)
   const [error,       setError]      = useState(null)
   const [lastUpd,     setLastUpd]    = useState(null)
@@ -2531,9 +2542,7 @@ export default function OpsBoard() {
   const [modo,        setModo]       = useState('kanban')
   const [toast,       setToast]      = useState(null)
 
-  // Merge: prefer Sheet version if local item already synced
-  const _sheetNorms = new Set(items.map(i => norm(i.tema)))
-  const allItems = [...items, ...localItems.filter(li => !_sheetNorms.has(norm(li.tema)))]
+  const allItems = items.filter(i => !i._deleted)
   const owners   = [...new Set(allItems.map(i => i.propietario).filter(Boolean))]
 
   const loadData = async () => {
@@ -2550,79 +2559,58 @@ export default function OpsBoard() {
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [])
-
-  // Persist local items so they survive page reloads
-  useEffect(() => { lsSet(LOCAL_ITEMS_KEY, localItems) }, [localItems])
-
-  // Add items to local state AND persist to Google Sheet (primary) + localStorage (fallback)
-  const addLocalItems = newItems => {
-    setLocalItems(prev => {
-      const updated = [...prev, ...newItems]
-      lsSet(LOCAL_ITEMS_KEY, updated)
-      return updated
-    })
-    // Write to Sheet — items will survive any reload once synced
-    fetch('/api/append', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: newItems }),
-    })
-      .then(r => { if (!r.ok) return r.text().then(t => { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,200)) }); return r.json() })
-      .then(d => { setToast('✓ ' + d.appended + ' tarea(s) guardada(s) en Sheet') })
-      .catch(e => { setToast('⚠ Error al guardar en Sheet: ' + e.message) })
-  }
-  const addLocalItem = item => addLocalItems([item])
-
-  const [syncing, setSyncing] = useState(false)
-  const syncToSheet = async () => {
-    const unsynced = localItems.filter(li => !_sheetNorms.has(norm(li.tema)))
-    if (!unsynced.length) { setToast('✓ Todo sincronizado'); return }
-    setSyncing(true)
-    try {
-      const r = await fetch('/api/append', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: unsynced }),
+  useEffect(() => {
+    loadData()
+    // Real-time subscription — any change in Supabase updates all users instantly
+    const sub = supabase
+      .channel('items-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          setItems(prev => [dbToItem(payload.new), ...prev.filter(i => i.id !== payload.new.id)])
+        } else if (payload.eventType === 'UPDATE') {
+          setItems(prev => prev.map(i => i.id === payload.new.id ? dbToItem(payload.new) : i))
+        } else if (payload.eventType === 'DELETE') {
+          setItems(prev => prev.filter(i => i.id !== payload.old.id))
+        }
       })
-      const txt = await r.text()
-      if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + txt.slice(0, 300))
-      let d; try { d = JSON.parse(txt) } catch { throw new Error('Respuesta inválida: ' + txt.slice(0,100)) }
-      // Remove synced items from localItems — they'll come from Sheets after reload
-      const syncedNorms = new Set(unsynced.map(li => norm(li.tema)))
-      setLocalItems(prev => {
-        const next = prev.filter(li => !syncedNorms.has(norm(li.tema)))
-        lsSet(LOCAL_ITEMS_KEY, next)
-        return next
-      })
-      setToast('✓ ' + d.appended + ' tarea(s) subidas a Google Sheets')
-      await loadData()
-    } catch (e) {
-      console.error('[sync]', e)
-      setToast('⚠ Error: ' + e.message)
-    }
-    setSyncing(false)
-  }
+      .subscribe()
+    realtimeSub.current = sub
+    return () => { supabase.removeChannel(sub) }
+  }, [])
 
-  const clearLocalItems = () => {
-    if (!window.confirm('¿Vaciar los ' + localItems.length + ' ítems locales? (Asegúrate de que están en Google Sheets primero)')) return
-    setLocalItems([])
-    lsSet(LOCAL_ITEMS_KEY, [])
-    setToast('Local limpiado')
+  const addLocalItem = async item => {
+    const { error } = await supabase.from('items').insert([itemToDb(item)])
+    if (error) { setToast('⚠ Error al guardar: ' + error.message); return }
+    // Real-time will update state, but add optimistically too
+    setItems(prev => [item, ...prev])
+    setToast('✓ Tarea guardada')
   }
 
   const onItemChange = (id, fields) => {
+    // Optimistic update
     setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
-    setLocalItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
+    // Persist to Supabase (map camelCase to snake_case for DB columns)
+    const dbFields = {}
+    if (fields.status       !== undefined) dbFields.status       = fields.status
+    if (fields.estadoSheet  !== undefined) dbFields.estado_sheet = fields.estadoSheet
+    if (fields.propietario  !== undefined) dbFields.propietario  = fields.propietario
+    if (fields.prioridad    !== undefined) dbFields.prioridad    = fields.prioridad
+    if (fields.risk         !== undefined) dbFields.risk         = fields.risk
+    if (fields.fechaFin     !== undefined) dbFields.fecha_fin    = fields.fechaFin instanceof Date ? fields.fechaFin.toISOString() : fields.fechaFin
+    if (fields.fechaInicio  !== undefined) dbFields.fecha_inicio = fields.fechaInicio instanceof Date ? fields.fechaInicio.toISOString() : fields.fechaInicio
+    if (fields.notas        !== undefined) dbFields.notas        = fields.notas
+    if (fields.objetivo     !== undefined) dbFields.objetivo     = fields.objetivo
+    if (fields.tema         !== undefined) dbFields.tema         = fields.tema
+    if (fields.propietario  !== undefined) dbFields.propietario  = fields.propietario
+    if (fields.category     !== undefined) dbFields.category     = fields.category
+    if (fields.proyecto     !== undefined) dbFields.proyecto     = fields.proyecto
+    if (fields.subtareas    !== undefined) dbFields.subtareas    = fields.subtareas
+    if (Object.keys(dbFields).length) sbUpdate(id, dbFields).catch(e => console.error('[onItemChange]', e))
   }
 
-  const onNextSt = async (id, newSt) => {
-    const item = allItems.find(i => i.id===id)
-    if (!item) return
+  const onNextSt = (id, newSt) => {
     if (newSt === 'done') saveDoneTs(id)
-    saveOverride(norm(item.tema), { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
-    try { await apiUpdate(item.tema, { estado: ST_TO_SHEET[newSt] }) } catch {}
-    onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt] })
+    onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt]||'No iniciado' })
   }
 
   const proyectosConOv = proyectos.map(p => {
@@ -2726,23 +2714,7 @@ export default function OpsBoard() {
               {loading ? '⏳' : '↺'}
             </button>
           </div>
-          {(() => {
-            const unsynced = localItems.filter(li => !_sheetNorms.has(norm(li.tema)))
-            if (!unsynced.length) return null
-            return (
-              <button onClick={syncToSheet} disabled={syncing}
-                title={`${unsynced.length} tarea(s) sólo en tu navegador — pulsa para subir a Google Sheets`}
-                style={{ marginTop:8, width:'100%', padding:'6px 0', borderRadius:6, border:'1px solid #fbbf24', background:'#fffbeb', color:'#92400e', fontSize:11, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
-                {syncing ? '⏳ Subiendo…' : `⬆ Sincronizar (${unsynced.length})`}
-              </button>
-            )
-          })()}
-          {localItems.length > 0 && (
-            <button onClick={clearLocalItems}
-              style={{ marginTop:4, width:'100%', padding:'3px 0', borderRadius:5, border:'none', background:'none', color:'#94a3b8', fontSize:10, cursor:'pointer', textDecoration:'underline' }}>
-              Vaciar caché local ({localItems.length})
-            </button>
-          )}
+
         </div>
       </div>
 
@@ -2760,6 +2732,28 @@ export default function OpsBoard() {
               onMouseEnter={e => e.currentTarget.style.background='#d41c2f'}
               onMouseLeave={e => e.currentTarget.style.background=C.accent}>
               + Nuevo tema
+            </button>
+          )}
+          {items.length === 0 && !loading && (
+            <button onClick={async () => {
+              setToast('⏳ Migrando desde Google Sheets…')
+              try {
+                const r = await fetch('/api/data')
+                if (!r.ok) throw new Error('HTTP ' + r.status)
+                const { values } = await r.json()
+                const { parseSheetValues: psv, buildItems: bi } = await import('./parser.js')
+                // Dynamic import to reuse parser
+                const tables = psv(values)
+                const sheetItems = bi(tables)
+                const rows = sheetItems.map(itemToDb)
+                const { error } = await supabase.from('items').insert(rows)
+                if (error) throw new Error(error.message)
+                setToast('✓ ' + rows.length + ' tareas migradas a Supabase')
+                loadData()
+              } catch(e) { setToast('⚠ Error migrando: ' + e.message) }
+            }}
+              style={{ padding:'7px 14px', background:'#1e40af', color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              ⬆ Migrar Sheets → Supabase
             </button>
           )}
         </div>

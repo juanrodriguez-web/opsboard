@@ -1,0 +1,13 @@
+@echo off
+cd /d "%~dp0"
+echo Eliminando lock file si existe...
+del /f /q ".git\index.lock" 2>nul
+echo Añadiendo cambios...
+git add src/App.jsx
+echo Haciendo commit...
+git commit -m "fix: add missing ModalItem, NuevoTema, PRIORIDADES, KNOWN_OWNERS"
+echo Haciendo push...
+git push origin main
+echo.
+echo Listo! Vercel desplegara en ~1 min.
+pause
