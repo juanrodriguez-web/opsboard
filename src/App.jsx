@@ -2546,7 +2546,9 @@ export default function OpsBoard() {
   const [modo,        setModo]       = useState('kanban')
   const [toast,       setToast]      = useState(null)
 
-  const allItems = [...items, ...localItems]
+  // Merge: prefer Sheet version if local item already synced
+  const _sheetNorms = new Set(items.map(i => norm(i.tema)))
+  const allItems = [...items, ...localItems.filter(li => !_sheetNorms.has(norm(li.tema)))]
   const owners   = [...new Set(allItems.map(i => i.propietario).filter(Boolean))]
 
   const loadData = async () => {
@@ -2557,13 +2559,6 @@ export default function OpsBoard() {
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
       setLastUpd(new Date())
-      // Remove localItems that are now in the sheet (synced) — avoid duplicates
-      setLocalItems(prev => {
-        const fetchedNorms = new Set(fetched.map(i => norm(i.tema)))
-        const filtered = prev.filter(li => !fetchedNorms.has(norm(li.tema)))
-        lsSet(LOCAL_ITEMS_KEY, filtered)
-        return filtered
-      })
     } catch (e) {
       setError(e.message || String(e))
     }
