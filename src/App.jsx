@@ -2574,6 +2574,27 @@ export default function OpsBoard() {
   }
   const addLocalItem = item => addLocalItems([item])
 
+  const [syncing, setSyncing] = useState(false)
+  const syncToSheet = async () => {
+    const unsynced = localItems.filter(li => !_sheetNorms.has(norm(li.tema)))
+    if (!unsynced.length) { setToast('✓ Todo sincronizado'); return }
+    setSyncing(true)
+    try {
+      const r = await fetch('/api/append', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: unsynced }),
+      })
+      if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ': ' + t.slice(0,200)) }
+      const d = await r.json()
+      setToast('✓ ' + d.appended + ' tarea(s) sincronizadas en Sheet')
+      await loadData()  // refresh from Sheet so they appear for everyone
+    } catch (e) {
+      setToast('⚠ Error al sincronizar: ' + e.message)
+    }
+    setSyncing(false)
+  }
+
   const onItemChange = (id, fields) => {
     setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
     setLocalItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
@@ -2688,6 +2709,18 @@ export default function OpsBoard() {
               style={{ background:'none', border:`1px solid ${C.border}`, color:'#9b978f', borderRadius:6, padding:'4px 9px', fontSize:12, cursor:'pointer', lineHeight:1 }}>
               {loading ? '⏳' : '↺'}
             </button>
+          </div>
+          {(() => {
+            const unsynced = localItems.filter(li => !_sheetNorms.has(norm(li.tema)))
+            if (!unsynced.length) return null
+            return (
+              <button onClick={syncToSheet} disabled={syncing}
+                title={`${unsynced.length} tarea(s) sólo en tu navegador — pulsa para subir a Google Sheets`}
+                style={{ marginTop:8, width:'100%', padding:'6px 0', borderRadius:6, border:'1px solid #fbbf24', background:'#fffbeb', color:'#92400e', fontSize:11, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
+                {syncing ? '⏳ Subiendo…' : `⬆ Sincronizar (${unsynced.length})`}
+              </button>
+            )
+          })()}
           </div>
         </div>
       </div>
