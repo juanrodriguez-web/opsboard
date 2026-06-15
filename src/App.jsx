@@ -2568,6 +2568,16 @@ export default function OpsBoard() {
   // Persist local items so they survive page reloads
   useEffect(() => { lsSet(LOCAL_ITEMS_KEY, localItems) }, [localItems])
 
+  // Synchronous helper — saves immediately without relying on effect timing
+  const addLocalItems = newItems => {
+    setLocalItems(prev => {
+      const updated = [...prev, ...newItems]
+      lsSet(LOCAL_ITEMS_KEY, updated)   // save NOW, not after next render
+      return updated
+    })
+  }
+  const addLocalItem = item => addLocalItems([item])
+
   const onItemChange = (id, fields) => {
     setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
     setLocalItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
@@ -2726,10 +2736,10 @@ export default function OpsBoard() {
                   owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                   onNuevo={() => setShowNuevo(true)} />
               )}
-              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={item => setLocalItems(p => [...p, item])} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
-              {vista === '✨ IA Intake'        && <IAIntake onAdd={ni => setLocalItems(p => [...p, ...ni])} allItems={allItems} />}
+              {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
               {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
@@ -2739,7 +2749,7 @@ export default function OpsBoard() {
 
       {showNuevo && (
         <NuevoTema
-          onAdd={item => setLocalItems(p => [...p, item])}
+          onAdd={addLocalItem}
           onClose={() => setShowNuevo(false)}
           proyectoNames={proyectos.map(p => p.nombre)} />
       )}
