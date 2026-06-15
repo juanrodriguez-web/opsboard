@@ -2585,14 +2585,30 @@ export default function OpsBoard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: unsynced }),
       })
-      if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ': ' + t.slice(0,200)) }
-      const d = await r.json()
-      setToast('✓ ' + d.appended + ' tarea(s) sincronizadas en Sheet')
-      await loadData()  // refresh from Sheet so they appear for everyone
+      const txt = await r.text()
+      if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + txt.slice(0, 300))
+      let d; try { d = JSON.parse(txt) } catch { throw new Error('Respuesta inválida: ' + txt.slice(0,100)) }
+      // Remove synced items from localItems — they'll come from Sheets after reload
+      const syncedNorms = new Set(unsynced.map(li => norm(li.tema)))
+      setLocalItems(prev => {
+        const next = prev.filter(li => !syncedNorms.has(norm(li.tema)))
+        lsSet(LOCAL_ITEMS_KEY, next)
+        return next
+      })
+      setToast('✓ ' + d.appended + ' tarea(s) subidas a Google Sheets')
+      await loadData()
     } catch (e) {
-      setToast('⚠ Error al sincronizar: ' + e.message)
+      console.error('[sync]', e)
+      setToast('⚠ Error: ' + e.message)
     }
     setSyncing(false)
+  }
+
+  const clearLocalItems = () => {
+    if (!window.confirm('¿Vaciar los ' + localItems.length + ' ítems locales? (Asegúrate de que están en Google Sheets primero)')) return
+    setLocalItems([])
+    lsSet(LOCAL_ITEMS_KEY, [])
+    setToast('Local limpiado')
   }
 
   const onItemChange = (id, fields) => {
@@ -2721,6 +2737,12 @@ export default function OpsBoard() {
               </button>
             )
           })()}
+          {localItems.length > 0 && (
+            <button onClick={clearLocalItems}
+              style={{ marginTop:4, width:'100%', padding:'3px 0', borderRadius:5, border:'none', background:'none', color:'#94a3b8', fontSize:10, cursor:'pointer', textDecoration:'underline' }}>
+              Vaciar caché local ({localItems.length})
+            </button>
+          )}
         </div>
       </div>
 
