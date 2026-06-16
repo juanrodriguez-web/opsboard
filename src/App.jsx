@@ -164,16 +164,18 @@ function itemToDb(item) {
 function dbToProy(row) { return { ...row } }
 
 async function fetchAll() {
-  const [{ data: iData, error: e1 }, { data: pData, error: e2 }] = await Promise.all([
+  const [{ data: iData, error: e1 }, { data: pData, error: e2 }, { data: cData, error: e3 }] = await Promise.all([
     supabase.from('items').select('*').order('created_at', { ascending: false }),
     supabase.from('proyectos').select('*').order('created_at', { ascending: false }),
+    supabase.from('campanas').select('*').order('created_at', { ascending: false }),
   ])
   if (e1) throw new Error('items: ' + e1.message)
   if (e2) throw new Error('proyectos: ' + e2.message)
+  // campanas error is non-fatal (table may be empty)
   return {
     items:     (iData || []).map(dbToItem),
-    proyectos: (pData || []).map(dbToProy),
-    campanas:  [],
+    proyectos: (pData || []),
+    campanas:  (cData || []),
   }
 }
 
@@ -2581,9 +2583,15 @@ export default function OpsBoard() {
   const addLocalItem = async item => {
     const { error } = await supabase.from('items').insert([itemToDb(item)])
     if (error) { setToast('⚠ Error al guardar: ' + error.message); return }
-    // Real-time will update state, but add optimistically too
     setItems(prev => [item, ...prev])
     setToast('✓ Tarea guardada')
+  }
+  const addLocalItems = async newItems => {
+    const rows = newItems.map(itemToDb)
+    const { error } = await supabase.from('items').insert(rows)
+    if (error) { setToast('⚠ Error al guardar: ' + error.message); return }
+    setItems(prev => [...newItems, ...prev])
+    setToast('✓ ' + newItems.length + ' tarea(s) guardadas')
   }
 
   const onItemChange = (id, fields) => {
@@ -2741,14 +2749,28 @@ export default function OpsBoard() {
                 const r = await fetch('/api/data')
                 if (!r.ok) throw new Error('HTTP ' + r.status)
                 const { values } = await r.json()
-                const { parseSheetValues: psv, buildItems: bi } = await import('./parser.js')
-                // Dynamic import to reuse parser
-                const tables = psv(values)
-                const sheetItems = bi(tables)
-                const rows = sheetItems.map(itemToDb)
-                const { error } = await supabase.from('items').insert(rows)
-                if (error) throw new Error(error.message)
-                setToast('✓ ' + rows.length + ' tareas migradas a Supabase')
+                const tables = parseSheetValues(values)
+                // Migrate items
+                const sheetItems = buildItems(tables)
+                if (sheetItems.length) {
+                  const { error: e1 } = await supabase.from('items').insert(sheetItems.map(itemToDb))
+                  if (e1) throw new Error('items: ' + e1.message)
+                }
+                // Migrate proyectos
+                const sheetProys = parseProyectos(tables)
+                const proyRows = sheetProys.map(p => ({
+                  id: uid(), nombre: p.nombre||'Sin nombre', descripcion: p.descripcion||'',
+                  propietario: p.propietario||'', prioridad: p.prioridad||'',
+                  estado: p.estado||'', desarrollo: p.desarrollo||'',
+                  fecha_inicio: p.fechaInicio instanceof Date ? p.fechaInicio.toISOString() : null,
+                  fecha_fin:    p.fechaFin    instanceof Date ? p.fechaFin.toISOString()    : null,
+                  notas: p.notas||'',
+                }))
+                if (proyRows.length) {
+                  const { error: e2 } = await supabase.from('proyectos').insert(proyRows)
+                  if (e2) throw new Error('proyectos: ' + e2.message)
+                }
+                setToast('✓ Migradas ' + sheetItems.length + ' tareas + ' + proyRows.length + ' proyectos')
                 loadData()
               } catch(e) { setToast('⚠ Error migrando: ' + e.message) }
             }}
