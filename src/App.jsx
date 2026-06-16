@@ -161,7 +161,18 @@ function itemToDb(item) {
     subtareas:    item.subtareas || [],
   }
 }
-function dbToProy(row) { return { ...row } }
+function dbToProy(row) {
+  return {
+    ...row,
+    // Map snake_case DB fields to camelCase used by components
+    status:      row.status || mapSt(row.estado || ''),
+    fechaInicio: row.fecha_inicio ? new Date(row.fecha_inicio) : null,
+    fechaFin:    row.fecha_fin    ? new Date(row.fecha_fin)    : null,
+    fase:        row.fase        || '',
+    capex:       row.capex       ?? null,
+    nombreEN:    row.nombre_en   || '',
+  }
+}
 
 async function fetchAll() {
   const [{ data: iData, error: e1 }, { data: pData, error: e2 }, { data: cData, error: e3 }] = await Promise.all([
@@ -1389,7 +1400,8 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
         <div style={{ fontSize:36, marginBottom:12 }}>🗂️</div>
         <h3 style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:8 }}>No hay proyectos todavía</h3>
         <p style={{ fontSize:13, color:C.muted, lineHeight:1.7 }}>
-          Añade proyectos en la pestaña <b style={{ color:C.text }}>Proyectos</b> del Sheet y pulsa 🔄 para recargar.
+          Pulsa el botón <b style={{ color:C.text }}>⬆ Migrar Proyectos</b> arriba para importar los proyectos del Sheet,
+          o créalos directamente desde el panel de administración de Supabase.
         </p>
       </div>
     </div>
@@ -2742,7 +2754,7 @@ export default function OpsBoard() {
               + Nuevo tema
             </button>
           )}
-          {items.length === 0 && !loading && (
+          {(items.length === 0 || proyectos.length === 0) && !loading && (
             <button onClick={async () => {
               setToast('⏳ Migrando desde Google Sheets…')
               try {
@@ -2750,32 +2762,43 @@ export default function OpsBoard() {
                 if (!r.ok) throw new Error('HTTP ' + r.status)
                 const { values } = await r.json()
                 const tables = parseSheetValues(values)
-                // Migrate items
-                const sheetItems = buildItems(tables)
-                if (sheetItems.length) {
-                  const { error: e1 } = await supabase.from('items').insert(sheetItems.map(itemToDb))
-                  if (e1) throw new Error('items: ' + e1.message)
+                let migratedItems = 0, migratedProys = 0
+                // Only migrate items if none exist yet
+                if (items.length === 0) {
+                  const sheetItems = buildItems(tables)
+                  if (sheetItems.length) {
+                    const { error: e1 } = await supabase.from('items').insert(sheetItems.map(itemToDb))
+                    if (e1) throw new Error('items: ' + e1.message)
+                    migratedItems = sheetItems.length
+                  }
                 }
-                // Migrate proyectos
-                const sheetProys = parseProyectos(tables)
-                const proyRows = sheetProys.map(p => ({
-                  id: uid(), nombre: p.nombre||'Sin nombre', descripcion: p.descripcion||'',
-                  propietario: p.propietario||'', prioridad: p.prioridad||'',
-                  estado: p.estado||'', desarrollo: p.desarrollo||'',
-                  fecha_inicio: p.fechaInicio instanceof Date ? p.fechaInicio.toISOString() : null,
-                  fecha_fin:    p.fechaFin    instanceof Date ? p.fechaFin.toISOString()    : null,
-                  notas: p.notas||'',
-                }))
-                if (proyRows.length) {
-                  const { error: e2 } = await supabase.from('proyectos').insert(proyRows)
-                  if (e2) throw new Error('proyectos: ' + e2.message)
+                // Only migrate proyectos if none exist yet
+                if (proyectos.length === 0) {
+                  const sheetProys = parseProyectos(tables)
+                  const proyRows = sheetProys.map(p => ({
+                    id: uid(), nombre: p.nombre||'Sin nombre', descripcion: p.descripcion||'',
+                    propietario: p.propietario||'', prioridad: p.prioridad||'',
+                    estado: p.estado||'', status: p.status||'pending', desarrollo: p.desarrollo||'',
+                    fecha_inicio: p.fechaInicio instanceof Date ? p.fechaInicio.toISOString() : null,
+                    fecha_fin:    p.fechaFin    instanceof Date ? p.fechaFin.toISOString()    : null,
+                    notas: p.notas||'', fase: p.fase||'',
+                    capex: p.capex||null, nombre_en: p.nombreEN||'',
+                  }))
+                  if (proyRows.length) {
+                    const { error: e2 } = await supabase.from('proyectos').insert(proyRows)
+                    if (e2) throw new Error('proyectos: ' + e2.message)
+                    migratedProys = proyRows.length
+                  } else {
+                    setToast('⚠ No se encontraron proyectos en el Sheet')
+                    loadData(); return
+                  }
                 }
-                setToast('✓ Migradas ' + sheetItems.length + ' tareas + ' + proyRows.length + ' proyectos')
+                setToast('✓ Migradas ' + migratedItems + ' tareas + ' + migratedProys + ' proyectos')
                 loadData()
               } catch(e) { setToast('⚠ Error migrando: ' + e.message) }
             }}
               style={{ padding:'7px 14px', background:'#1e40af', color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              ⬆ Migrar Sheets → Supabase
+              ⬆ {proyectos.length === 0 && items.length > 0 ? 'Migrar Proyectos' : 'Migrar Sheets → Supabase'}
             </button>
           )}
         </div>

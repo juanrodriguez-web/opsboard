@@ -32,13 +32,23 @@ create table if not exists proyectos (
   propietario   text default '',
   prioridad     text default '',
   estado        text default '',
+  status        text default 'pending',
   desarrollo    text default '',
   fecha_inicio  timestamptz,
   fecha_fin     timestamptz,
   notas         text default '',
+  fase          text default '',
+  capex         numeric,
+  nombre_en     text default '',
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
+
+-- Run these if the proyectos table already exists (ALTER to add missing columns):
+-- alter table proyectos add column if not exists status text default 'pending';
+-- alter table proyectos add column if not exists fase text default '';
+-- alter table proyectos add column if not exists capex numeric;
+-- alter table proyectos add column if not exists nombre_en text default '';
 
 -- COMENTARIOS
 create table if not exists comentarios (
