@@ -18,6 +18,7 @@ const ST = [
   { id:'inprogress', label:'En Curso',   color:'#f59e0b' },
   { id:'blocked',    label:'Bloqueado',  color:'#e11d48' },
   { id:'done',       label:'Completado', color:'#10b981' },
+  { id:'backlog',    label:'Backlog',    color:'#94a3b8' },
 ]
 const RK = [
   { id:'green',  label:'Normal',   color:'#10b981' },
@@ -26,7 +27,7 @@ const RK = [
 ]
 const ST_TO_SHEET = {
   pending:'No iniciado', inprogress:'Según lo planificado',
-  blocked:'En peligro',  done:'Hecho',
+  blocked:'En peligro',  done:'Hecho', backlog:'No iniciado',
 }
 const C = {
   bg:'#f5f3f0', surface:'#fafaf8', card:'#ffffff',
@@ -58,7 +59,7 @@ const PRI_COLORS = {
 const priColor = p => PRI_COLORS[p] || { bg:C.surface, color:C.muted }
 
 // WIP limits per column (null = no limit)
-const WIP_LIMITS = { pending:null, inprogress:8, blocked:null, done:null }
+const WIP_LIMITS = { pending:null, inprogress:null, blocked:null, done:null, backlog:null }
 
 const PRIORIDADES  = ['P0', 'P1', 'P2', 'P3']
 const KNOWN_OWNERS = ['Juan Rodriguez Peisel', 'Francisco Toledo', 'Nacho Cruz', 'Maria Garcia']
@@ -365,7 +366,18 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
             {isOverdue && '⚠ '}{dueLabel}
           </span>
         )}
-        {!isDone && (
+        {!isDone && item.status !== 'backlog' && (
+          <button
+            title="Mover al Backlog"
+            aria-label="Mover al Backlog"
+            onClick={e => { e.stopPropagation(); onNextSt(item.id, 'backlog') }}
+            style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#94a3b8', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background='#f1f5f9'; e.currentTarget.style.borderColor='#94a3b8'; e.currentTarget.style.color='#475569' }}
+            onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#94a3b8' }}>
+            ⊟
+          </button>
+        )}
+        {!isDone && item.status !== 'backlog' && (
           <button
             title={`Avanzar a: ${nextSt.label}`}
             aria-label={`Cambiar estado a ${nextSt.label}`}
@@ -427,10 +439,16 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
   const [search,      setSearch]      = useState('')
   const [priF,        setPriF]        = useState('all')
   const [alertasOnly, setAlertasOnly] = useState(false)
+  const [backlogOpen, setBacklogOpen] = useState(true)
+  const [activarId,   setActivarId]   = useState(null)
+  const [activarSt,   setActivarSt]   = useState('pending')
   const w = useW()
   const kanbanCols = w >= 1024 ? 'repeat(4,1fr)' : w >= 640 ? 'repeat(2,1fr)' : 'repeat(1,1fr)'
 
+  const backlogItems = items.filter(i => i.status === 'backlog')
+
   const f = items
+    .filter(i => i.status !== 'backlog')
     .filter(i => catF==='all'||i.category===catF)
     .filter(i => asF==='all'||norm(i.propietario)===norm(asF))
     .filter(i => priF==='all'||i.prioridad===priF)
@@ -535,7 +553,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
       {/* ── Kanban view ── */}
       {modo === 'kanban' && f.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:kanbanCols, gap:14 }}>
-          {ST.map(st => {
+          {ST.filter(st => st.id !== 'backlog').map(st => {
             const col      = f.filter(i => i.status === st.id && !isArchived(i))
             const limit    = WIP_LIMITS[st.id]
             const overLimit = limit && col.length > limit
@@ -577,6 +595,64 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
               </div>
             )
           })}
+        </div>
+      )}
+
+
+      {/* ── Backlog section ── */}
+      {backlogItems.length > 0 && (
+        <div style={{ marginTop:20, border:`1px solid #cbd5e1`, borderRadius:10, overflow:'hidden' }}>
+          <div
+            onClick={() => setBacklogOpen(p => !p)}
+            style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'#f8fafc', cursor:'pointer', userSelect:'none' }}>
+            <span style={{ fontSize:12, color:'#94a3b8', transition:'transform .2s', display:'inline-block', transform: backlogOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9658;</span>
+            <span style={{ fontSize:12, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'.06em' }}>Backlog</span>
+            <span style={{ fontSize:11, background:'#e2e8f0', color:'#64748b', borderRadius:10, padding:'1px 8px', fontWeight:600 }}>{backlogItems.length}</span>
+            <span style={{ fontSize:11, color:'#94a3b8', marginLeft:4 }}>temas en espera &middot; no son prioridad ahora</span>
+          </div>
+          {backlogOpen && (
+            <div style={{ padding:'10px 14px 14px', display:'flex', flexDirection:'column', gap:6 }}>
+              {backlogItems.map(item => {
+                const cat = CATS.find(c => c.id === item.category)
+                const pc  = priColor(item.prioridad)
+                const isActivating = activarId === item.id
+                const kanbanST = ST.filter(s => s.id !== 'backlog')
+                return (
+                  <div key={item.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'#fff', borderRadius:8, border:'1px solid #e2e8f0', cursor:'pointer' }}
+                    onClick={() => setItem(item)}>
+                    <span style={{ width:6, height:6, borderRadius:'50%', background:cat?.color||C.muted, flexShrink:0 }} />
+                    <span style={{ flex:1, fontSize:12, color:'#334155', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.tema}</span>
+                    {item.prioridad && <span style={{ fontSize:10, fontWeight:700, padding:'1px 5px', borderRadius:4, background:pc.bg, color:pc.color }}>{item.prioridad}</span>}
+                    <span style={{ fontSize:11, color:C.muted }}>{(item.propietario||'').split(' ')[0]||'--'}</span>
+                    {isActivating ? (
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
+                        <select value={activarSt} onChange={e => setActivarSt(e.target.value)}
+                          style={{ fontSize:11, padding:'3px 6px', borderRadius:5, border:'1px solid #cbd5e1', background:'#fff', color:'#334155', cursor:'pointer' }}>
+                          {kanbanST.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                        <button
+                          onClick={e => { e.stopPropagation(); onNextSt(item.id, activarSt); setActivarId(null) }}
+                          style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:C.accent, color:'#fff', border:'none', cursor:'pointer', fontWeight:600 }}>
+                          Activar
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setActivarId(null) }}
+                          style={{ fontSize:11, padding:'3px 8px', borderRadius:5, background:'none', color:C.muted, border:'1px solid #e2e8f0', cursor:'pointer' }}>
+                          X
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); setActivarId(item.id); setActivarSt('pending') }}
+                        style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', cursor:'pointer', fontWeight:600, whiteSpace:'nowrap' }}>
+                        Activar
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
