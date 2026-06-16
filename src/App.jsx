@@ -2262,6 +2262,8 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
   const [eNotas, setENotas] = useState(itemOrig.notas || '')
   const [eProy,  setEProy]  = useState(itemOrig.proyecto || '')
   const [eCat,   setECat]   = useState(itemOrig.category || 'projects')
+  const [subtareas, setSubtareas] = useState(Array.isArray(itemOrig.subtareas) ? itemOrig.subtareas : [])
+  const [newSub, setNewSub] = useState('')
 
   useEffect(() => {
     const h = e => e.key === 'Escape' && (editing ? setEditing(false) : onClose())
@@ -2283,6 +2285,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
       notas:      eNotas.trim(),
       proyecto:   eProy,
       category:   eCat,
+      subtareas,
     }
     onItemChange(item.id, fields)
     if (eSt === 'done') saveDoneTs(item.id)
@@ -2474,13 +2477,21 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                   return (
                     <div key={sub.id} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px' }}>
                       <button
-                        onClick={() => setSubtareas(prev => prev.map(s => s.id===sub.id ? {...s, status: done?'pending':'done'} : s))}
+                        onClick={() => {
+                          const updated = subtareas.map(s => s.id===sub.id ? {...s, status: done?'pending':'done'} : s)
+                          setSubtareas(updated)
+                          onItemChange(item.id, { subtareas: updated })
+                        }}
                         style={{ width:16, height:16, borderRadius:4, border:`2px solid ${done?'#10b981':C.border}`, background: done?'#10b981':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>
                         {done && <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>✓</span>}
                       </button>
                       <span style={{ fontSize:12, flex:1, color: done?C.muted:C.text, textDecoration: done?'line-through':'none' }}>{sub.title}</span>
                       {sub.prop && <span style={{ fontSize:10, color:C.muted }}>{sub.prop.split(' ')[0]}</span>}
-                      <button onClick={() => setSubtareas(prev => prev.filter(s => s.id !== sub.id))}
+                      <button onClick={() => {
+                          const updated = subtareas.filter(s => s.id !== sub.id)
+                          setSubtareas(updated)
+                          onItemChange(item.id, { subtareas: updated })
+                        }}
                         style={{ background:'none', border:'none', color:'#fca5a5', cursor:'pointer', fontSize:14, lineHeight:1, padding:'0 2px', flexShrink:0 }}>✕</button>
                     </div>
                   )
@@ -2488,10 +2499,17 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
               </div>
               <div style={{ display:'flex', gap:6 }}>
                 <input value={newSub} onChange={e => setNewSub(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && newSub.trim()) { setSubtareas(prev => [...prev, { id:uid(), title:newSub.trim(), status:'pending', prop:'', risk:'green', fechaFin:null, notas:'' }]); setNewSub('') }}}
+                  onKeyDown={e => { if (e.key === 'Enter' && newSub.trim()) {
+                    const updated = [...subtareas, { id:uid(), title:newSub.trim(), status:'pending', prop:'', risk:'green', fechaFin:null, notas:'' }]
+                    setSubtareas(updated); setNewSub(''); onItemChange(item.id, { subtareas: updated })
+                  }}}
                   placeholder="Nueva subtarea… (Enter para añadir)"
                   style={{ flex:1, background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px', fontSize:12, outline:'none' }} />
-                <button onClick={() => { if (!newSub.trim()) return; setSubtareas(prev => [...prev, { id:uid(), title:newSub.trim(), status:'pending', prop:'', risk:'green', fechaFin:null, notas:'' }]); setNewSub('') }}
+                <button onClick={() => {
+                    if (!newSub.trim()) return
+                    const updated = [...subtareas, { id:uid(), title:newSub.trim(), status:'pending', prop:'', risk:'green', fechaFin:null, notas:'' }]
+                    setSubtareas(updated); setNewSub(''); onItemChange(item.id, { subtareas: updated })
+                  }}
                   style={{ padding:'6px 12px', borderRadius:6, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:'pointer', fontWeight:600 }}>+ Add</button>
               </div>
             </div>
