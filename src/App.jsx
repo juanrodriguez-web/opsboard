@@ -368,13 +368,13 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
         )}
         {!isDone && item.status !== 'backlog' && (
           <button
-            title="Mover al Backlog"
+            title="Mover al Backlog (pausar)"
             aria-label="Mover al Backlog"
             onClick={e => { e.stopPropagation(); onNextSt(item.id, 'backlog') }}
-            style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#94a3b8', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
-            onMouseEnter={e => { e.currentTarget.style.background='#f1f5f9'; e.currentTarget.style.borderColor='#94a3b8'; e.currentTarget.style.color='#475569' }}
-            onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#94a3b8' }}>
-            ⊟
+            style={{ width:22, height:22, borderRadius:6, border:'1px solid #cbd5e1', background:'#f1f5f9', color:'#64748b', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background='#e2e8f0'; e.currentTarget.style.borderColor='#64748b'; e.currentTarget.style.color='#334155'; e.currentTarget.style.fontWeight='700' }}
+            onMouseLeave={e => { e.currentTarget.style.background='#f1f5f9'; e.currentTarget.style.borderColor='#cbd5e1'; e.currentTarget.style.color='#64748b'; e.currentTarget.style.fontWeight='400' }}>
+            ⊞
           </button>
         )}
         {!isDone && item.status !== 'backlog' && (
@@ -465,7 +465,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
   return (
     <div>
       {/* ── KPI strip ── */}
-      <TableroKPIStrip items={items} />
+      <TableroKPIStrip items={f} />
 
       {/* ── Filter bar ── */}
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:'8px 12px', marginBottom:12, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
@@ -604,11 +604,11 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
         <div style={{ marginTop:20, border:`1px solid #cbd5e1`, borderRadius:10, overflow:'hidden' }}>
           <div
             onClick={() => setBacklogOpen(p => !p)}
-            style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'#f8fafc', cursor:'pointer', userSelect:'none' }}>
-            <span style={{ fontSize:12, color:'#94a3b8', transition:'transform .2s', display:'inline-block', transform: backlogOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9658;</span>
-            <span style={{ fontSize:12, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'.06em' }}>Backlog</span>
-            <span style={{ fontSize:11, background:'#e2e8f0', color:'#64748b', borderRadius:10, padding:'1px 8px', fontWeight:600 }}>{backlogItems.length}</span>
-            <span style={{ fontSize:11, color:'#94a3b8', marginLeft:4 }}>temas en espera &middot; no son prioridad ahora</span>
+            style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 14px', background:'#f1f5f9', cursor:'pointer', userSelect:'none', borderBottom: backlogOpen ? `1px solid #cbd5e1` : 'none' }}>
+            <span style={{ fontSize:14, color:'#64748b', transition:'transform .2s', display:'inline-block', transform: backlogOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+            <span style={{ fontSize:13, fontWeight:700, color:'#334155', textTransform:'uppercase', letterSpacing:'.06em' }}>📦 Backlog</span>
+            <span style={{ fontSize:11, background:'#cbd5e1', color:'#334155', borderRadius:10, padding:'2px 8px', fontWeight:700 }}>{backlogItems.length}</span>
+            <span style={{ fontSize:10, color:'#64748b', marginLeft:4, fontStyle:'italic' }}>pausado · haz clic para activar</span>
           </div>
           {backlogOpen && (
             <div style={{ padding:'10px 14px 14px', display:'flex', flexDirection:'column', gap:6 }}>
