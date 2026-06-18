@@ -50,14 +50,30 @@ create table if not exists proyectos (
 -- alter table proyectos add column if not exists capex numeric;
 -- alter table proyectos add column if not exists nombre_en text default '';
 
--- COMENTARIOS
+-- COMENTARIOS (para items y proyectos)
 create table if not exists comentarios (
-  id        text primary key,
-  item_id   text references items(id) on delete cascade,
-  texto     text not null,
-  ts        text,
-  created_at timestamptz default now()
+  id            text primary key,
+  item_id       text references items(id) on delete cascade,
+  proyecto_id   text references proyectos(id) on delete cascade,
+  texto         text not null,
+  ts            text,
+  created_at    timestamptz default now()
 );
+
+-- HITOS (milestones/fases de proyectos)
+create table if not exists hitos (
+  id            text primary key,
+  proyecto_id   text not null references proyectos(id) on delete cascade,
+  nombre        text not null,
+  descripcion   text default '',
+  fecha_prevista timestamptz,
+  completado    boolean default false,
+  orden         integer,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+create index if not exists idx_hitos_proyecto on hitos(proyecto_id);
 
 -- CAMPANAS (si se usan)
 create table if not exists campanas (
@@ -76,11 +92,13 @@ alter table items      enable row level security;
 alter table proyectos  enable row level security;
 alter table comentarios enable row level security;
 alter table campanas   enable row level security;
+alter table hitos      enable row level security;
 
 create policy "public_all" on items      for all using (true) with check (true);
 create policy "public_all" on proyectos  for all using (true) with check (true);
 create policy "public_all" on comentarios for all using (true) with check (true);
 create policy "public_all" on campanas   for all using (true) with check (true);
+create policy "public_all" on hitos      for all using (true) with check (true);
 
 -- ── Auto-updated_at ───────────────────────────────────────────────
 create or replace function _set_updated_at()

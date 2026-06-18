@@ -196,6 +196,47 @@ async function sbUpdate(id, fields) {
   if (error) throw new Error(error.message)
 }
 
+async function sbUpdateProyecto(id, fields) {
+  const { error } = await supabase.from('proyectos').update(fields).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// Hitos
+async function fetchHitos(proyectoId) {
+  const { data, error } = await supabase.from('hitos').select('*').eq('proyecto_id', proyectoId).order('orden', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+async function addHito(proyectoId, nombre, fechaPrevista) {
+  const { data, error } = await supabase.from('hitos').insert({ id:uid(), proyecto_id:proyectoId, nombre, fecha_prevista:fechaPrevista, orden:0 }).select()
+  if (error) throw new Error(error.message)
+  return data?.[0]
+}
+
+async function updateHito(id, fields) {
+  const { error } = await supabase.from('hitos').update(fields).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+async function deleteHito(id) {
+  const { error } = await supabase.from('hitos').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// Comentarios de proyecto
+async function fetchProyectoComments(proyectoId) {
+  const { data, error } = await supabase.from('comentarios').select('*').eq('proyecto_id', proyectoId).eq('item_id', null).order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+async function addProyectoComment(proyectoId, texto) {
+  const { data, error } = await supabase.from('comentarios').insert({ id:uid(), proyecto_id:proyectoId, item_id:null, texto, ts:new Date().toLocaleString('es-ES') }).select()
+  if (error) throw new Error(error.message)
+  return data?.[0]
+}
+
 // Fire-and-forget email notification when a task is assigned to Juan or Fran
 async function notifyAssignment({ tema, propietario, descripcion = '', categoria = '', prioridad = '' }) {
   if (!propietario) return
@@ -1453,6 +1494,236 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   )
 }
 
+// ── ProjectDetailView (Nueva vista detallada de proyecto) ──────────────────────
+const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
+  const [tabActive, setTabActive] = useState('resumen')
+  const [hitos, setHitos] = useState([])
+  const [comentarios, setComentarios] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newHitoName, setNewHitoName] = useState('')
+  const [newHitoDate, setNewHitoDate] = useState('')
+  const [newComment, setNewComment] = useState('')
+
+  const temas = allItems.filter(i => norm(i.proyecto||'') === norm(proyecto.nombre))
+  const temasCompletados = temas.filter(t => t.status === 'done').length
+  const temaBloqueados = temas.filter(t => t.status === 'blocked').length
+  const pct = temas.length > 0 ? Math.round(temasCompletados / temas.length * 100) : 0
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const h = await fetchHitos(proyecto.id)
+        const c = await fetchProyectoComments(proyecto.id)
+        setHitos(h)
+        setComentarios(c)
+      } catch (e) {
+        console.error('Error loading proyecto details:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    cargar()
+  }, [proyecto.id])
+
+  const agregarHito = async () => {
+    if (!newHitoName.trim()) return
+    try {
+      const hito = await addHito(proyecto.id, newHitoName, newHitoDate || null)
+      setHitos([...hitos, hito])
+      setNewHitoName('')
+      setNewHitoDate('')
+    } catch (e) {
+      console.error('Error adding hito:', e)
+    }
+  }
+
+  const toggleHito = async (hito) => {
+    try {
+      await updateHito(hito.id, { completado: !hito.completado })
+      setHitos(hitos.map(h => h.id === hito.id ? { ...h, completado: !h.completado } : h))
+    } catch (e) {
+      console.error('Error updating hito:', e)
+    }
+  }
+
+  const eliminarHito = async (id) => {
+    try {
+      await deleteHito(id)
+      setHitos(hitos.filter(h => h.id !== id))
+    } catch (e) {
+      console.error('Error deleting hito:', e)
+    }
+  }
+
+  const agregarComentario = async () => {
+    if (!newComment.trim()) return
+    try {
+      const comentario = await addProyectoComment(proyecto.id, newComment)
+      setComentarios([comentario, ...comentarios])
+      setNewComment('')
+    } catch (e) {
+      console.error('Error adding comment:', e)
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:C.card, borderRadius:14, maxWidth:1200, width:'90%', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, padding:'20px 24px', borderBottom:`1px solid ${C.border}` }}>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:C.muted }}>←</button>
+          <div style={{ flex:1 }}>
+            <h2 style={{ fontSize:18, fontWeight:700, color:C.text, margin:0 }}>{proyecto.nombre}</h2>
+            {proyecto.descripcion && <p style={{ fontSize:12, color:C.muted, margin:'4px 0 0', marginTop:4 }}>{proyecto.descripcion}</p>}
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:C.muted }}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:'flex', gap:1, padding:'0 24px', borderBottom:`1px solid ${C.border}`, background:C.surface }}>
+          {[
+            { id:'resumen', label:'📋 Resumen', icon:'📋' },
+            { id:'timeline', label:'🗓️ Timeline', icon:'🗓️' },
+            { id:'temas', label:'✅ Temas', icon:'✅' },
+            { id:'comentarios', label:'💬 Chat', icon:'💬' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setTabActive(tab.id)}
+              style={{ padding:'12px 16px', fontSize:12, fontWeight:600, background:'none', border:'none', cursor:'pointer', borderBottom:`2px solid ${tabActive===tab.id?C.accent:'transparent'}`, color:tabActive===tab.id?C.accent:C.muted, transition:'all 150ms ease' }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1, overflow:'auto', padding:'20px 24px' }}>
+          {loading ? (
+            <div style={{ textAlign:'center', color:C.muted, padding:'40px 0' }}>Cargando...</div>
+          ) : (
+            <>
+              {/* TAB: RESUMEN */}
+              {tabActive === 'resumen' && (
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:20 }}>
+                  {[
+                    { l:'Estado', v:proyecto.status || '—', c:C.accent },
+                    { l:'Propietario', v:proyecto.propietario || '—', c:C.muted },
+                    { l:'Fase', v:proyecto.fase || '—', c:C.muted },
+                    { l:'Capex', v:proyecto.capex ? '$' + proyecto.capex.toLocaleString('es') : '—', c:C.muted },
+                    { l:'Temas', v:temas.length, c:'#818cf8' },
+                    { l:'Completados', v:`${temasCompletados}/${temas.length}`, c:'#34d399' },
+                    { l:'Bloqueados', v:temaBloqueados, c:'#f43f5e' },
+                    { l:'Progreso', v:`${pct}%`, c:C.accent },
+                  ].map((item, i) => (
+                    <div key={i} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:'12px 16px' }}>
+                      <div style={{ fontSize:11, color:C.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>{item.l}</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:item.c }}>{item.v}</div>
+                    </div>
+                  ))}
+                  <div style={{ gridColumn:'1/-1', paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:8, textTransform:'uppercase' }}>Fechas</div>
+                    <div style={{ display:'flex', gap:16 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:C.muted, marginBottom:2 }}>Inicio</div>
+                        <div style={{ fontSize:13, color:C.text }}>{proyecto.fecha_inicio ? fmtFecha(fdStr(proyecto.fecha_inicio)) : '—'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:10, color:C.muted, marginBottom:2 }}>Fin</div>
+                        <div style={{ fontSize:13, color:C.text }}>{proyecto.fecha_fin ? fmtFecha(fdStr(proyecto.fecha_fin)) : '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: TIMELINE */}
+              {tabActive === 'timeline' && (
+                <div>
+                  <div style={{ marginBottom:20 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:12 }}>📌 Hitos del Proyecto</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {hitos.map(h => (
+                        <div key={h.id} style={{ display:'flex', alignItems:'center', gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 14px' }}>
+                          <button onClick={() => toggleHito(h)} style={{ width:20, height:20, borderRadius:4, border:`2px solid ${h.completado?C.accent:C.border}`, background:h.completado?C.accent:'transparent', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, color:'#fff', cursor:'pointer', flexShrink:0 }}>
+                            {h.completado && '✓'}
+                          </button>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:12, color:h.completado?C.muted:C.text, textDecoration:h.completado?'line-through':'none' }}>{h.nombre}</div>
+                            {h.descripcion && <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{h.descripcion}</div>}
+                          </div>
+                          {h.fecha_prevista && <div style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{fmtFecha(fdStr(h.fecha_prevista))}</div>}
+                          <button onClick={() => eliminarHito(h.id)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:12 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop:16, padding:'14px', background:C.surface, border:`1px solid ${C.border}`, borderRadius:8 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:10, textTransform:'uppercase' }}>➕ Nuevo hito</div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <input type="text" placeholder="Nombre del hito" value={newHitoName} onChange={e => setNewHitoName(e.target.value)} style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:6, padding:'8px 12px', fontSize:12, background:C.card, color:C.text, outline:'none' }} />
+                      <input type="date" value={newHitoDate} onChange={e => setNewHitoDate(e.target.value)} style={{ border:`1px solid ${C.border}`, borderRadius:6, padding:'8px 12px', fontSize:12, background:C.card, color:C.text, outline:'none' }} />
+                      <button onClick={agregarHito} style={{ padding:'8px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer' }}>Agregar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: TEMAS */}
+              {tabActive === 'temas' && (
+                <div>
+                  {temas.length === 0 ? (
+                    <div style={{ textAlign:'center', color:C.muted, padding:'40px 0' }}>
+                      <p>No hay temas vinculados a este proyecto</p>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {temas.map(t => {
+                        const st = ST.find(s => s.id === t.status)
+                        const pc = priColor(t.prioridad)
+                        return (
+                          <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 14px', cursor:'pointer' }} onClick={() => { onClose(); onSave?.(); }}>
+                            <div style={{ width:4, height:4, borderRadius:'50%', background:st?.color || C.muted, flexShrink:0 }} />
+                            <span style={{ flex:1, fontSize:12, color:C.text, fontWeight:500 }}>{t.tema}</span>
+                            {t.prioridad && <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:pc.bg, color:pc.color }}>{t.prioridad}</span>}
+                            <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color }}>{st?.label}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: COMENTARIOS */}
+              {tabActive === 'comentarios' && (
+                <div>
+                  <div style={{ marginBottom:20, padding:'12px 14px', background:C.surface, border:`1px solid ${C.border}`, borderRadius:8 }}>
+                    <textarea placeholder="Añade un comentario..." value={newComment} onChange={e => setNewComment(e.target.value)} style={{ width:'100%', border:'none', background:'none', fontSize:12, color:C.text, outline:'none', resize:'vertical', minHeight:60, fontFamily:'inherit' }} />
+                    <button onClick={agregarComentario} disabled={!newComment.trim()} style={{ marginTop:8, padding:'6px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer', opacity:newComment.trim()?1:0.5 }}>Enviar</button>
+                  </div>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {comentarios.length === 0 ? (
+                      <div style={{ textAlign:'center', color:C.muted, padding:'40px 0', fontSize:12 }}>Sin comentarios aún</div>
+                    ) : (
+                      comentarios.map(c => (
+                        <div key={c.id} style={{ padding:'12px 14px', background:C.surface, border:`1px solid ${C.border}`, borderRadius:8 }}>
+                          <div style={{ fontSize:11, color:C.muted, marginBottom:6 }}>{c.ts || new Date(c.created_at).toLocaleString('es-ES')}</div>
+                          <div style={{ fontSize:12, color:C.text, lineHeight:1.5 }}>{c.texto}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Proyectos ─────────────────────────────────────────────────────────────────
 const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang='es' }) => {
   const [filtSt,          setFiltSt]          = useState('all')
@@ -1701,16 +1972,13 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
         )
       })()}
 
-      {/* Modal proyecto */}
+      {/* Project Detail View (NEW) */}
       {modalProy && (
-        <ModalProyecto
+        <ProjectDetailView
           proyecto={modalProy}
           allItems={allItems}
           onClose={() => setModalProy(null)}
-          onAddTema={tema => { onAddTema(tema) }}
-          onOpenItem={item => { setModalProy(null); onOpenItem?.(item) }}
-          onUpdate={(nombre, fields) => { onUpdate?.(nombre, fields); setModalProy(prev => prev ? {...prev,...fields,_hasLocalProy:true} : prev) }}
-          lang={lang}
+          onSave={() => { setModalProy(null) }}
         />
       )}
     </div>
