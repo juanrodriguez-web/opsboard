@@ -1728,11 +1728,19 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
 const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang='es' }) => {
   const [filtSt,          setFiltSt]          = useState('all')
   const [showSinProyecto, setShowSinProyecto] = useState(false)
+  const [showBacklog,     setShowBacklog]     = useState(false)
+  const [activarProyId,   setActivarProyId]   = useState(null)
+  const [activarProySt,   setActivarProySt]   = useState('pending')
   const [modalProy,       setModalProy]       = useState(null)
   const [modo,            setModo]            = useState('cards')
 
   const temasOf  = nombre => allItems.filter(i => norm(i.proyecto||'') === norm(nombre))
-  const filtered = [...proyectos.filter(p => filtSt === 'all' || p.status === filtSt)]
+
+  // Separar proyectos activos y backlog
+  const backlogProyectos = proyectos.filter(p => p.status === 'backlog')
+  const activeProyectos = proyectos.filter(p => p.status !== 'backlog')
+
+  const filtered = [...activeProyectos.filter(p => filtSt === 'all' || p.status === filtSt)]
     .sort((a, b) => {
       const aDone = a.status === 'done', bDone = b.status === 'done'
       if (aDone !== bDone) return aDone ? 1 : -1
@@ -1832,6 +1840,61 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
                       <Tag id={t.category} type="cat" />
                       <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
                       <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{(t.propietario||'').split(' ')[0]}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Backlog de Proyectos */}
+      {(() => {
+        if (backlogProyectos.length === 0) return null
+        return (
+          <div style={{ marginBottom:18 }}>
+            <button onClick={() => setShowBacklog(p => !p)}
+              style={{ display:'flex', alignItems:'center', gap:8, width:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:showBacklog?'10px 10px 0 0':10, padding:'12px 16px', cursor:'pointer', color:C.text, fontSize:13, fontWeight:600, outline:'none', transition:'background 150ms ease-out' }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:'#94a3b8', display:'inline-block', flexShrink:0 }} />
+              <span style={{ flex:1, textAlign:'left' }}>📦 Backlog de Proyectos</span>
+              <span style={{ fontSize:11, color:C.muted, background:C.surface, padding:'2px 8px', borderRadius:10 }}>{backlogProyectos.length}</span>
+              <span style={{ color:C.muted, fontSize:11, display:'inline-block', transition:'transform 200ms ease-out', transform:showBacklog?'rotate(180deg)':'rotate(0deg)' }}>▼</span>
+            </button>
+            {showBacklog && (
+              <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderTop:'none', borderRadius:'0 0 10px 10px', overflow:'hidden' }}>
+                {backlogProyectos.map((p, i) => {
+                  const temas     = temasOf(p.nombre)
+                  const isActivating = activarProyId === p.id
+                  return (
+                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12, animation:`rowIn 220ms ease-out ${i*20}ms both`, cursor:'pointer' }} onClick={() => setModalProy(p)}>
+                      <div style={{ width:3, height:16, borderRadius:2, background:'#94a3b8', flexShrink:0 }} />
+                      <span style={{ flex:1, color:C.text, fontWeight:500 }}>{p.nombre}</span>
+                      <span style={{ fontSize:10, color:C.muted }}>{temas.length} temas</span>
+                      {isActivating ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
+                          <select value={activarProySt} onChange={e => setActivarProySt(e.target.value)}
+                            style={{ fontSize:11, padding:'3px 6px', borderRadius:5, border:'1px solid #cbd5e1', background:'#fff', color:'#334155', cursor:'pointer' }}>
+                            {ST.filter(s => s.id !== 'backlog').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                          </select>
+                          <button
+                            onClick={e => { e.stopPropagation(); sbUpdateProyecto(p.id, { status:activarProySt }); setActivarProyId(null); window.location.reload() }}
+                            style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:C.accent, color:'#fff', border:'none', cursor:'pointer', fontWeight:600 }}>
+                            Activar
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setActivarProyId(null) }}
+                            style={{ fontSize:11, padding:'3px 8px', borderRadius:5, background:'none', color:C.muted, border:'1px solid #e2e8f0', cursor:'pointer' }}>
+                            X
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={e => { e.stopPropagation(); setActivarProyId(p.id); setActivarProySt('pending') }}
+                          style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', cursor:'pointer', fontWeight:600, whiteSpace:'nowrap' }}>
+                          Activar
+                        </button>
+                      )}
                     </div>
                   )
                 })}
