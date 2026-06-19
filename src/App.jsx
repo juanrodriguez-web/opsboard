@@ -1503,6 +1503,8 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
   const [newHitoName, setNewHitoName] = useState('')
   const [newHitoDate, setNewHitoDate] = useState('')
   const [newComment, setNewComment] = useState('')
+  const [editando, setEditando] = useState(false)
+  const [proyForm, setProyForm] = useState({ nombre: proyecto.nombre, descripcion: proyecto.descripcion, fechaInicio: fdStr(proyecto.fecha_inicio), fechaFin: fdStr(proyecto.fecha_fin) })
 
   const temas = allItems.filter(i => norm(i.proyecto||'') === norm(proyecto.nombre))
   const temasCompletados = temas.filter(t => t.status === 'done').length
@@ -1567,6 +1569,31 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
     }
   }
 
+  const guardarProyecto = async () => {
+    try {
+      await sbUpdateProyecto(proyecto.id, {
+        nombre: proyForm.nombre,
+        descripcion: proyForm.descripcion,
+        fecha_inicio: proyForm.fechaInicio || null,
+        fecha_fin: proyForm.fechaFin || null,
+      })
+      setEditando(false)
+      onSave?.()
+    } catch (e) {
+      console.error('Error saving proyecto:', e)
+    }
+  }
+
+  const moverAlBacklog = async () => {
+    try {
+      await sbUpdateProyecto(proyecto.id, { status: 'backlog' })
+      onClose()
+      onSave?.()
+    } catch (e) {
+      console.error('Error moving to backlog:', e)
+    }
+  }
+
   return (
     <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ background:C.card, borderRadius:14, maxWidth:1200, width:'90%', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
@@ -1577,6 +1604,12 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
             <h2 style={{ fontSize:18, fontWeight:700, color:C.text, margin:0 }}>{proyecto.nombre}</h2>
             {proyecto.descripcion && <p style={{ fontSize:12, color:C.muted, margin:'4px 0 0', marginTop:4 }}>{proyecto.descripcion}</p>}
           </div>
+          <button onClick={() => setEditando(!editando)} title="Editar proyecto" style={{ padding:'6px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:`1px solid ${C.border}`, background:editando?C.accent+'22':C.card, color:editando?C.accent:C.text, cursor:'pointer' }}>
+            ✎ {editando?'Cancelar':'Editar'}
+          </button>
+          <button onClick={moverAlBacklog} title="Mover al Backlog" style={{ padding:'6px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:'1px solid #cbd5e1', background:'#f1f5f9', color:'#475569', cursor:'pointer' }}>
+            ⊞ Backlog
+          </button>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:C.muted }}>✕</button>
         </div>
 
@@ -1603,7 +1636,35 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
             <>
               {/* TAB: RESUMEN */}
               {tabActive === 'resumen' && (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:20 }}>
+                <div>
+                  {editando ? (
+                    <div style={{ display:'flex', flexDirection:'column', gap:14, marginBottom:20, padding:'16px', background:C.surface, borderRadius:8, border:`1px solid ${C.border}` }}>
+                      <div>
+                        <label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:6 }}>Nombre</label>
+                        <input type="text" value={proyForm.nombre} onChange={e => setProyForm({...proyForm, nombre:e.target.value})} style={{ width:'100%', padding:'8px 12px', border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:C.card, color:C.text, outline:'none' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:6 }}>Descripción</label>
+                        <textarea value={proyForm.descripcion} onChange={e => setProyForm({...proyForm, descripcion:e.target.value})} style={{ width:'100%', padding:'8px 12px', border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:C.card, color:C.text, outline:'none', minHeight:80, fontFamily:'inherit', resize:'vertical' }} />
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                        <div>
+                          <label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:6 }}>Fecha Inicio</label>
+                          <input type="date" value={proyForm.fechaInicio} onChange={e => setProyForm({...proyForm, fechaInicio:e.target.value})} style={{ width:'100%', padding:'8px 12px', border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:C.card, color:C.text, outline:'none' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:6 }}>Fecha Fin</label>
+                          <input type="date" value={proyForm.fechaFin} onChange={e => setProyForm({...proyForm, fechaFin:e.target.value})} style={{ width:'100%', padding:'8px 12px', border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, background:C.card, color:C.text, outline:'none' }} />
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button onClick={guardarProyecto} style={{ padding:'8px 16px', background:C.accent, color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer' }}>Guardar</button>
+                        <button onClick={() => setEditando(false)} style={{ padding:'8px 16px', background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer' }}>Cancelar</button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:20 }}>
                   {[
                     { l:'Estado', v:proyecto.status || '—', c:C.accent },
                     { l:'Propietario', v:proyecto.propietario || '—', c:C.muted },
@@ -1632,6 +1693,7 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               )}
 
