@@ -1,13 +1,28 @@
 # ⚡ Inicio Rápido - Sistema de Intake Automático
 
-## 🚀 Setup en 3 Pasos
+## 🚀 Setup en 4 Pasos
 
 ### Paso 1: Instalar dependencias
 ```powershell
 npm install
 ```
 
-### Paso 2: Configurar Task Scheduler (automático)
+### Paso 2: Configurar Anthropic API Key ⚙️
+Tu clave de Anthropic es necesaria para que Claude AI analice los documentos.
+
+**Opción A: Vía Vercel CLI (recomendado)**
+```powershell
+vercel env add CLAUDE_API_KEY
+# Selecciona "development" cuando pregunte
+# Pega tu API key (obtén en https://console.anthropic.com/account/keys)
+```
+
+**Opción B: Mediante script interactivo**
+```powershell
+.\bin\setup-api-key.ps1
+```
+
+### Paso 3: Configurar Task Scheduler (automático)
 ```powershell
 # Abre PowerShell como Administrador y ejecuta:
 .\bin\setup-scheduler.ps1
@@ -17,10 +32,12 @@ El script crea automáticamente dos tareas:
 - **OpsBoard Intake - 12:00** (mediodía)
 - **OpsBoard Intake - 16:30** (tarde)
 
-### Paso 3: Prueba manual
+### Paso 4: Prueba manual
 ```powershell
 npm run process-intake
 ```
+
+Debería procesar archivos de test o mostrar un mensaje si la carpeta está vacía.
 
 ---
 
@@ -50,23 +67,21 @@ npm run process-intake
 
 ## 📖 Documentación Completa
 
-Ver: [INTAKE_SETUP.md](INTAKE_SETUP.md)
-
-Para troubleshooting y configuración avanzada.
+Ver: [INTAKE_SETUP.md](INTAKE_SETUP.md) para troubleshooting y configuración avanzada.
 
 ---
 
 ## ✅ Verificar que funciona
 
 ```powershell
-# 1. Ver si existen las tareas
-Get-ScheduledTask -TaskName "*OpsBoard Intake*"
+# 1. Ver si la API key está configurada
+vercel env ls | findstr CLAUDE_API_KEY
 
-# 2. Ver logs de la última ejecución
-Get-Content "bin\intake-logs\*.log" | Select-Object -Last 20
+# 2. Ver si existen las tareas
+Get-ScheduledTask -TaskName "*OpsBoard*"
 
-# 3. Ejecutar una tarea manualmente
-Start-ScheduledTask -TaskName "OpsBoard Intake - 12:00"
+# 3. Ejecutar una prueba
+npm run process-intake
 ```
 
 ---
@@ -77,11 +92,11 @@ Start-ScheduledTask -TaskName "OpsBoard Intake - 12:00"
 |--------|---------|
 | Procesar archivos manualmente | `npm run process-intake` |
 | Ver logs | `Get-ChildItem bin\intake-logs\` |
-| Limpiar archivos procesados | `Remove-Item bin\intake-logs\.processed\*` |
-| Editar horarios | Task Scheduler → Right-click tarea → Edit |
+| Actualizar API key | `vercel env add CLAUDE_API_KEY` |
+| Editar horarios Task Scheduler | `taskschd.msc` |
 
 ---
 
-**¡Listo!** El sistema está configurado. 🎉
+**¡Sistema listo!** 🎉
 
-Ahora simplemente deja archivos en la carpeta y ellos se procesarán automáticamente.
+Ahora simplemente deja archivos en la carpeta intake y serán procesados automáticamente por Claude AI.
