@@ -519,8 +519,8 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
           {search && <button onClick={() => setSearch('')} style={{ border:'none', background:'none', color:C.muted, cursor:'pointer', fontSize:12 }}>✕</button>}
         </div>
 
-        {/* Category chips */}
-        {[{ id:'all', label:'Todas', color:C.muted }, ...CATS].map(c => {
+        {/* Category chips - hidden en móvil */}
+        {w >= 768 && [{ id:'all', label:'Todas', color:C.muted }, ...CATS].map(c => {
           const n  = c.id === 'all' ? items.length : items.filter(i => i.category === c.id).length
           const on = catF === c.id && !alertasOnly
           return (
@@ -533,16 +533,18 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
           )
         })}
 
-        {/* Separator */}
-        <div style={{ width:1, height:18, background:C.border, flexShrink:0 }} />
+        {/* Separator - hidden en móvil */}
+        {w >= 768 && <div style={{ width:1, height:18, background:C.border, flexShrink:0 }} />}
 
-        {/* Alertas quick filter */}
-        <button onClick={toggleAlertas}
-          style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer',
-            border:alertasOnly?`1px solid #e11d4877`:`1px solid ${C.border}`,
-            background:alertasOnly?'#fef2f2':C.card, color:alertasOnly?'#e11d48':C.muted, whiteSpace:'nowrap' }}>
-          ⚠ Alertas {alertasOnly && <span style={{ opacity:.65 }}>{f.length}</span>}
-        </button>
+        {/* Alertas quick filter - hidden en móvil */}
+        {w >= 768 && (
+          <button onClick={toggleAlertas}
+            style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer',
+              border:alertasOnly?`1px solid #e11d4877`:`1px solid ${C.border}`,
+              background:alertasOnly?'#fef2f2':C.card, color:alertasOnly?'#e11d48':C.muted, whiteSpace:'nowrap' }}>
+            ⚠ Alertas {alertasOnly && <span style={{ opacity:.65 }}>{f.length}</span>}
+          </button>
+        )}
 
         {/* Right: owner + priority + views + new */}
         <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
