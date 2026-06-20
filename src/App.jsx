@@ -3498,17 +3498,16 @@ export default function OpsBoard() {
     })
   }, [items.length])
 
-  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico','👤 Cristina']
+  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
     'Tablero':            'Tablero de Temas',
     '🗂️ Proyectos':      'Proyectos',
-    '📋 Reporte Semanal': 'Reporte Semanal',
+    '📋 Reporte Semanal': 'Reporte Semanal Ejecutivo',
     '📅 Campañas CVM':   'Campañas CVM',
     '✨ IA Intake':       'IA Intake',
     '⧆ Histórico':       'Histórico',
-    '👤 Cristina':        'Reporte Cristina',
   }
 
   // Nav icon map for sidebar
@@ -3520,7 +3519,6 @@ export default function OpsBoard() {
     '📅 Campañas CVM':   '◷',
     '✨ IA Intake':       '✦',
     '⧆ Histórico':       '⊙',
-    '👤 Cristina':        '◆',
   }
 
   return (
@@ -3681,9 +3679,8 @@ export default function OpsBoard() {
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
-              {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
+              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
-              {vista === '👤 Cristina'        && <Cristina items={allItems} proyectos={proyectos} idioma={lang} />}
             </>
           )}
         </div>
