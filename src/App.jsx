@@ -2688,42 +2688,48 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
 
   const t = labels[idioma] || labels.ES;
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   return (
     <div style={{
-      padding: '2rem',
-      maxWidth: '1200px',
+      padding: isMobile ? '1rem' : '2rem',
+      maxWidth: '100%',
+      width: '100%',
       margin: '0 auto',
       fontFamily: '"Inter", -apple-system, sans-serif',
       color: '#1f2937',
       background: '#f9fafb',
-      minHeight: '100vh'
+      minHeight: '100vh',
+      boxSizing: 'border-box'
     }}>
 
       {/* HEADER */}
-      <div style={{ marginBottom: '2rem' }}>
+      <div style={{ marginBottom: isMobile ? '1.5rem' : '2rem', paddingBottom: isMobile ? '0.75rem' : '1rem', borderBottom: '1px solid #e5e7eb' }}>
         <h1 style={{
-          fontSize: '2rem',
+          fontSize: isMobile ? '1.5rem' : '2rem',
           fontWeight: '700',
-          margin: '0 0 0.5rem 0',
-          color: '#000'
+          margin: '0 0 0.25rem 0',
+          color: '#000',
+          lineHeight: '1.2'
         }}>
           {t.titulo}
         </h1>
         <p style={{
-          fontSize: '0.875rem',
+          fontSize: isMobile ? '0.75rem' : '0.875rem',
           color: '#6b7280',
-          margin: 0
+          margin: 0,
+          wordBreak: 'break-word'
         }}>
-          📊 {t.sincronizando} • Última actualización: {hoy.toLocaleTimeString(idioma === 'ES' ? 'es-ES' : 'en-US')}
+          📊 {t.sincronizando} • {hoy.toLocaleTimeString(idioma === 'ES' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
 
-      {/* GRID PRINCIPAL */}
+      {/* GRID PRINCIPAL - Mobile: 1 col, Tablet: 2 col, Desktop: 3 col */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '1.5rem',
-        marginBottom: '2rem'
+        gridTemplateColumns: isMobile ? '1fr' : window.innerWidth < 1024 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+        gap: isMobile ? '1rem' : '1.5rem',
+        marginBottom: isMobile ? '1.5rem' : '2rem'
       }}>
 
         {/* CARD 1: STATUS RÁPIDO */}
@@ -2731,24 +2737,24 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
           background: 'white',
           border: '1px solid #e5e7eb',
           borderRadius: '0.5rem',
-          padding: '1.5rem',
+          padding: isMobile ? '1rem' : '1.5rem',
           boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
         }}>
           <h2 style={{
-            fontSize: '0.875rem',
+            fontSize: isMobile ? '0.75rem' : '0.875rem',
             fontWeight: '600',
             color: '#6b7280',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            margin: '0 0 1rem 0'
+            margin: '0 0 0.75rem 0'
           }}>
             {t.statusRapido}
           </h2>
-          <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', gap: isMobile ? '0.75rem' : '1rem', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#6b7280' }}>{t.onTrack}</span>
+              <span style={{ color: '#6b7280', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>{t.onTrack}</span>
               <span style={{
-                fontSize: '1.875rem',
+                fontSize: isMobile ? '1.5rem' : '1.875rem',
                 fontWeight: '700',
                 color: '#3b82f6'
               }}>
@@ -2756,9 +2762,9 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#6b7280' }}>{t.enPeligro}</span>
+              <span style={{ color: '#6b7280', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>{t.enPeligro}</span>
               <span style={{
-                fontSize: '1.875rem',
+                fontSize: isMobile ? '1.5rem' : '1.875rem',
                 fontWeight: '700',
                 color: enPeligro > 0 ? '#ef4444' : '#10b981'
               }}>
@@ -2766,9 +2772,9 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#6b7280' }}>{t.completados}</span>
+              <span style={{ color: '#6b7280', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>{t.completados}</span>
               <span style={{
-                fontSize: '1.875rem',
+                fontSize: isMobile ? '1.5rem' : '1.875rem',
                 fontWeight: '700',
                 color: '#10b981'
               }}>
@@ -2776,14 +2782,15 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
               </span>
             </div>
             <div style={{
-              marginTop: '0.75rem',
-              paddingTop: '0.75rem',
+              marginTop: isMobile ? '0.5rem' : '0.75rem',
+              paddingTop: isMobile ? '0.5rem' : '0.75rem',
               borderTop: '1px solid #e5e7eb',
               display: 'flex',
-              justifyContent: 'space-between'
+              justifyContent: 'space-between',
+              fontSize: isMobile ? '0.75rem' : '0.875rem'
             }}>
               <span style={{ fontWeight: '600', color: '#000' }}>Total</span>
-              <span style={{ fontWeight: '600', color: '#000' }}>{total} temas</span>
+              <span style={{ fontWeight: '600', color: '#000' }}>{total}</span>
             </div>
           </div>
         </div>
@@ -2793,47 +2800,50 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
           background: 'white',
           border: '1px solid #e5e7eb',
           borderRadius: '0.5rem',
-          padding: '1.5rem',
+          padding: isMobile ? '1rem' : '1.5rem',
           boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
         }}>
           <h2 style={{
-            fontSize: '0.875rem',
+            fontSize: isMobile ? '0.75rem' : '0.875rem',
             fontWeight: '600',
             color: '#6b7280',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            margin: '0 0 1rem 0'
+            margin: '0 0 0.75rem 0'
           }}>
             {t.estaSemana}
           </h2>
           {cerradosEstaSemana.length > 0 ? (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              {cerradosEstaSemana.slice(0, 3).map(item => (
+              {cerradosEstaSemana.slice(0, isMobile ? 2 : 3).map(item => (
                 <li key={item.id} style={{
-                  fontSize: '0.875rem',
+                  fontSize: isMobile ? '0.75rem' : '0.875rem',
                   padding: '0.5rem 0',
                   color: '#374151',
                   display: 'flex',
-                  gap: '0.5rem'
+                  gap: '0.5rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
                 }}>
-                  <span style={{ color: '#10b981' }}>✓</span>
-                  <span>{item.tema}</span>
+                  <span style={{ color: '#10b981', flexShrink: 0 }}>✓</span>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.tema}</span>
                 </li>
               ))}
-              {cerradosEstaSemana.length > 3 && (
+              {cerradosEstaSemana.length > (isMobile ? 2 : 3) && (
                 <li style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.65rem',
                   color: '#9ca3af',
                   borderTop: '1px solid #e5e7eb',
                   marginTop: '0.5rem',
-                  paddingTop: '0.75rem'
+                  paddingTop: '0.5rem'
                 }}>
-                  +{cerradosEstaSemana.length - 3} más
+                  +{cerradosEstaSemana.length - (isMobile ? 2 : 3)} más
                 </li>
               )}
             </ul>
           ) : (
-            <p style={{ color: '#9ca3af', fontSize: '0.875rem', margin: 0 }}>
+            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.75rem' : '0.875rem', margin: 0 }}>
               {t.noData}
             </p>
           )}
@@ -2844,37 +2854,37 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
           background: 'white',
           border: '1px solid #e5e7eb',
           borderRadius: '0.5rem',
-          padding: '1.5rem',
+          padding: isMobile ? '1rem' : '1.5rem',
           boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
         }}>
           <h2 style={{
-            fontSize: '0.875rem',
+            fontSize: isMobile ? '0.75rem' : '0.875rem',
             fontWeight: '600',
             color: '#6b7280',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            margin: '0 0 1rem 0'
+            margin: '0 0 0.75rem 0'
           }}>
             {t.proximaSemana}
           </h2>
           {proximosSieteDias.length > 0 ? (
-            <ol style={{ margin: 0, padding: '0 0 0 1.5rem' }}>
-              {proximosSieteDias.slice(0, 3).map((item, idx) => (
+            <ol style={{ margin: 0, padding: isMobile ? '0 0 0 1rem' : '0 0 0 1.5rem', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>
+              {proximosSieteDias.slice(0, isMobile ? 2 : 3).map((item, idx) => (
                 <li key={item.id} style={{
-                  fontSize: '0.875rem',
                   padding: '0.5rem 0',
-                  color: '#374151'
+                  color: '#374151',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
                 }}>
-                  <strong>{item.tema}</strong>
-                  <br />
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                    🎯 {item.prioridad || 'Sin prioridad'}
+                  <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.tema}</strong>
+                  <span style={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: '#6b7280' }}>
+                    🎯 {item.prioridad || '—'}
                   </span>
                 </li>
               ))}
             </ol>
           ) : (
-            <p style={{ color: '#9ca3af', fontSize: '0.875rem', margin: 0 }}>
+            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.75rem' : '0.875rem', margin: 0 }}>
               {t.noData}
             </p>
           )}
@@ -2887,63 +2897,72 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
         background: 'white',
         border: '1px solid #e5e7eb',
         borderRadius: '0.5rem',
-        padding: '1.5rem',
+        padding: isMobile ? '1rem' : '1.5rem',
         boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
       }}>
         <h2 style={{
-          fontSize: '0.875rem',
+          fontSize: isMobile ? '0.75rem' : '0.875rem',
           fontWeight: '600',
           color: '#6b7280',
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          margin: '0 0 1rem 0'
+          margin: '0 0 0.75rem 0'
         }}>
           ⚠️  {t.riesgos}
         </h2>
         {riesgos.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-            {riesgos.map(item => (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: isMobile ? '0.75rem' : '1rem' }}>
+            {riesgos.slice(0, isMobile ? 3 : undefined).map(item => (
               <div key={item.id} style={{
                 background: item.estado === 'blocked' ? '#fef2f2' : '#fffbeb',
                 border: `1px solid ${item.estado === 'blocked' ? '#fecaca' : '#fde68a'}`,
                 borderLeft: `4px solid ${item.prioridad === 'P0' ? '#dc2626' : '#f59e0b'}`,
                 borderRadius: '0.375rem',
-                padding: '1rem',
-                fontSize: '0.875rem'
+                padding: isMobile ? '0.75rem' : '1rem',
+                fontSize: isMobile ? '0.75rem' : '0.875rem'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
-                  <strong style={{ color: '#1f2937' }}>{item.tema}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '0.5rem' }}>
+                  <strong style={{ color: '#1f2937', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-word' }}>{item.tema}</strong>
                   <span style={{
-                    fontSize: '0.75rem',
+                    fontSize: isMobile ? '0.65rem' : '0.75rem',
                     fontWeight: '600',
                     color: item.prioridad === 'P0' ? '#dc2626' : '#d97706',
                     background: item.prioridad === 'P0' ? '#fee2e2' : '#fef3c7',
                     padding: '0.25rem 0.5rem',
-                    borderRadius: '0.25rem'
+                    borderRadius: '0.25rem',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap'
                   }}>
                     {item.prioridad}
                   </span>
                 </div>
-                <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: '0.8125rem' }}>
-                  {item.notas || 'Sin notas'}
-                </p>
+                {item.notas && (
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: isMobile ? '0.7rem' : '0.8125rem', lineHeight: '1.4', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {item.notas}
+                  </p>
+                )}
                 {item.fechaFin && (
-                  <p style={{ margin: '0.5rem 0 0 0', color: '#9ca3af', fontSize: '0.75rem' }}>
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#9ca3af', fontSize: isMobile ? '0.65rem' : '0.75rem' }}>
                     📅 {new Date(item.fechaFin).toLocaleDateString(idioma === 'ES' ? 'es-ES' : 'en-US')}
                   </p>
                 )}
               </div>
             ))}
+            {isMobile && riesgos.length > 3 && (
+              <div style={{ padding: '0.75rem', color: '#6b7280', fontSize: '0.75rem', textAlign: 'center', borderTop: '1px solid #e5e7eb' }}>
+                +{riesgos.length - 3} riesgos más
+              </div>
+            )}
           </div>
         ) : (
           <div style={{
             background: '#f0fdf4',
             border: '1px solid #86efac',
             borderRadius: '0.375rem',
-            padding: '1rem',
+            padding: isMobile ? '0.75rem' : '1rem',
             color: '#166534',
             textAlign: 'center',
-            fontSize: '0.875rem'
+            fontSize: isMobile ? '0.75rem' : '0.875rem'
           }}>
             {t.sinRiesgos}
           </div>
@@ -2952,15 +2971,16 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
 
       {/* FOOTER */}
       <div style={{
-        marginTop: '2rem',
-        paddingTop: '1rem',
+        marginTop: isMobile ? '1.5rem' : '2rem',
+        paddingTop: isMobile ? '0.75rem' : '1rem',
         borderTop: '1px solid #e5e7eb',
-        fontSize: '0.75rem',
+        fontSize: isMobile ? '0.65rem' : '0.75rem',
         color: '#9ca3af',
-        textAlign: 'center'
+        textAlign: 'center',
+        overflow: 'hidden'
       }}>
-        <p style={{ margin: 0 }}>
-          👤 {idioma === 'ES' ? 'Datos de' : 'Data from'} Juan Rodriguez Peisel • {idioma === 'ES' ? 'Actualizado en tiempo real desde Supabase' : 'Real-time updates from Supabase'}
+        <p style={{ margin: 0, wordBreak: 'break-word' }}>
+          👤 {idioma === 'ES' ? 'Datos de' : 'Data from'} Juan Rodriguez • {idioma === 'ES' ? 'Realtime' : 'Real-time'}
         </p>
       </div>
     </div>
