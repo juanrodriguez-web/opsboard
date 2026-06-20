@@ -2824,7 +2824,6 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
                 <li style={{
                   fontSize: '0.75rem',
                   color: '#9ca3af',
-                  paddingTop: '0.5rem',
                   borderTop: '1px solid #e5e7eb',
                   marginTop: '0.5rem',
                   paddingTop: '0.75rem'
