@@ -3518,6 +3518,9 @@ export default function OpsBoard() {
     })
   }, [items.length])
 
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
   const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
@@ -3543,10 +3546,30 @@ export default function OpsBoard() {
 
   return (
     <div style={{ display:'flex', height:'100vh', background:C.bg, color:C.text, fontFamily:"'Geist',system-ui,sans-serif", overflow:'hidden' }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#d6d1c8;border-radius:4px}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}} ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#d6d1c8;border-radius:4px}`}</style>
 
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-      <div style={{ width:240, background:'#fff', borderRight:`1px solid ${C.border}`, display:'flex', flexDirection:'column', flexShrink:0, overflow:'hidden' }}>
+      {/* ── Sidebar (Desktop: fixed, Mobile: overlay) ──────────────────── */}
+      {/* Mobile overlay backdrop */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.3)', zIndex:99 }} />
+      )}
+
+      <div style={{
+        position: isMobile ? 'fixed' : 'relative',
+        left: isMobile && !sidebarOpen ? '-100%' : 0,
+        width: isMobile ? '80vw' : 240,
+        maxWidth: isMobile ? '280px' : 240,
+        background:'#fff',
+        borderRight:`1px solid ${C.border}`,
+        display:'flex',
+        flexDirection:'column',
+        flexShrink: isMobile ? 0 : 0,
+        overflow:'hidden',
+        height: '100vh',
+        zIndex: isMobile ? 100 : 'auto',
+        transition: isMobile ? 'left 300ms ease' : 'none'
+      }}>
         {/* Logo */}
         <div style={{ padding:'20px 20px 16px' }}>
           <div style={{ display:'flex', alignItems:'center', gap:9 }}>
@@ -3612,16 +3635,22 @@ export default function OpsBoard() {
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
         {/* Topbar */}
-        <div style={{ height:56, background:'#fff', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', padding:'0 24px', gap:16, flexShrink:0 }}>
-          <h1 style={{ flex:1, fontSize:14, fontWeight:600, color:C.text, letterSpacing:'-.005em', margin:0 }}>
+        <div style={{ height: isMobile ? 52 : 56, background:'#fff', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', padding: isMobile ? '0 12px' : '0 24px', gap: isMobile ? 8 : 16, flexShrink:0 }}>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', padding:'4px 8px', color:C.text }}>
+              ☰
+            </button>
+          )}
+          <h1 style={{ flex:1, fontSize: isMobile ? 12 : 14, fontWeight:600, color:C.text, letterSpacing:'-.005em', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {VIEW_LABELS[vista] || vista}
           </h1>
           {vista === 'Tablero' && (
             <button onClick={() => setShowNuevo(true)}
-              style={{ padding:'7px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms' }}
+              style={{ padding: isMobile ? '6px 10px' : '7px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize: isMobile ? 11 : 12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms', whiteSpace:'nowrap' }}
               onMouseEnter={e => e.currentTarget.style.background='#d41c2f'}
               onMouseLeave={e => e.currentTarget.style.background=C.accent}>
-              + Nuevo tema
+              {isMobile ? '+ Tema' : '+ Nuevo tema'}
             </button>
           )}
           {(items.length === 0 || proyectos.length === 0) && !loading && (
@@ -3674,7 +3703,7 @@ export default function OpsBoard() {
         </div>
 
         {/* Content */}
-        <div style={{ flex:1, overflow:'auto', padding:24 }}>
+        <div style={{ flex:1, overflow:'auto', padding: isMobile ? 12 : 24, width: '100%', boxSizing: 'border-box' }}>
           {loading && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:280, gap:12, color:C.muted }}>
               <div style={{ width:32, height:32, borderRadius:'50%', border:`3px solid ${C.border}`, borderTopColor:C.accent, animation:'spin .8s linear infinite' }} />
