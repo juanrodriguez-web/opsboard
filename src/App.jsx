@@ -1797,6 +1797,14 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
   const [activarProySt,   setActivarProySt]   = useState('pending')
   const [modalProy,       setModalProy]       = useState(null)
   const [modo,            setModo]            = useState('cards')
+  const [w, setW]         = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const isMobile = w < 768
+
+  useEffect(() => {
+    const h = () => setW(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
 
   const temasOf  = nombre => allItems.filter(i => norm(i.proyecto||'') === norm(nombre))
 
@@ -1841,39 +1849,39 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
       `}</style>
 
       {/* KPIs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
+      <div style={{ display:'grid', gridTemplateColumns:isMobile?'repeat(2,1fr)':'repeat(4,1fr)', gap:10, marginBottom:18 }}>
         {[
           { l:'Proyectos',    v:proyectos.length,                              c:C.accent },
           { l:'Temas vinc.',  v:totalTemas,                                    c:'#818cf8' },
           { l:'Sin proyecto', v:sinProyecto,                                   c:C.muted  },
           { l:'Completados',  v:proyectos.filter(p=>p.status==='done').length, c:'#34d399' },
         ].map((k,i) => (
-          <div key={i} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px' }}>
-            <div style={{ fontSize:26, fontWeight:700, color:k.c, lineHeight:1 }}>{k.v}</div>
-            <div style={{ fontSize:10, color:C.muted, marginTop:5, fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em' }}>{k.l}</div>
+          <div key={i} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:isMobile?'10px 12px':'12px 14px' }}>
+            <div style={{ fontSize:isMobile?22:26, fontWeight:700, color:k.c, lineHeight:1 }}>{k.v}</div>
+            <div style={{ fontSize:isMobile?9:10, color:C.muted, marginTop:4, fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em' }}>{k.l}</div>
           </div>
         ))}
       </div>
 
       {/* Filtros + toggle vista */}
-      <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap', alignItems:'center' }}>
+      <div style={{ display:'flex', gap:isMobile?4:6, marginBottom:18, flexWrap:'wrap', alignItems:'center', overflow:'auto' }}>
         {[{id:'all',label:'Todos',color:C.muted},...ST].map(s => {
           const on  = filtSt === s.id
           const col = s.color || C.muted
           const cnt = s.id==='all' ? proyectos.length : proyectos.filter(p=>p.status===s.id).length
           return (
             <button key={s.id} onClick={() => setFiltSt(s.id)}
-              style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer',
+              style={{ padding:isMobile?'3px 10px':'4px 12px', borderRadius:20, fontSize:isMobile?11:12, fontWeight:600, cursor:'pointer',
                 border:`1.5px solid ${on?col:C.border}`, background:on?col+'22':C.card, color:on?col:C.muted,
-                transition:'all 150ms ease-out' }}>
+                transition:'all 150ms ease-out', whiteSpace:'nowrap' }}>
               {s.label} <span style={{ opacity:.65 }}>{cnt}</span>
             </button>
           )
         })}
-        <div style={{ marginLeft:'auto', display:'flex', gap:4 }}>
+        <div style={{ marginLeft:'auto', display:'flex', gap:4, flexShrink:0 }}>
           {[{id:'cards',l:'⊞'},{id:'list',l:'☰'}].map(v => (
             <button key={v.id} onClick={() => setModo(v.id)} title={v.id==='cards'?'Vista Cards':'Vista Lista'}
-              style={{ padding:'4px 9px', borderRadius:6, fontSize:13, border:`1px solid ${C.border}`,
+              style={{ padding:isMobile?'3px 7px':'4px 9px', borderRadius:6, fontSize:isMobile?12:13, border:`1px solid ${C.border}`,
                 background:modo===v.id?C.accent+'22':C.card, color:modo===v.id?C.accent:C.muted, cursor:'pointer' }}>{v.l}</button>
           ))}
         </div>
@@ -1987,45 +1995,44 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
         })
 
         if (modo === 'cards') return (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(auto-fill,minmax(320px,1fr))', gap:isMobile?10:14 }}>
             {projRows.map(({ p, temas, blocked, pct, oc, accentCol, stData, pc, dias, diasColor, diasLabel }, i) => (
               <div key={p.id} className="proj-card" onClick={() => setModalProy(p)}
                 style={{ background:C.card, border:`1px solid ${dias!==null&&dias<0?'#fca5a555':C.border}`, borderRadius:10, overflow:'hidden', cursor:'pointer', animation:`cardIn 300ms cubic-bezier(0.23,1,0.32,1) ${i*45}ms both` }}>
                 <div style={{ height:3, background:`linear-gradient(90deg,${accentCol},${stData?.color||C.muted})` }} />
-                <div style={{ padding:'14px 16px 16px' }}>
-                  <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:7 }}>
+                <div style={{ padding:isMobile?'10px 12px 12px':'14px 16px 16px' }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:6 }}>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:14, fontWeight:700, color:C.text, lineHeight:1.3, marginBottom:3 }}>{p.nombre}</div>
-                      {p.descripcion && <div style={{ fontSize:11, color:C.muted, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{p.descripcion}</div>}
+                      <div style={{ fontSize:isMobile?13:14, fontWeight:700, color:C.text, lineHeight:1.3, marginBottom:2 }}>{p.nombre}</div>
+                      {p.descripcion && <div style={{ fontSize:isMobile?10:11, color:C.muted, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{p.descripcion}</div>}
                     </div>
                     <Tag id={p.status} type="st" />
                   </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:isMobile?5:7, marginBottom:8, flexWrap:'wrap', fontSize:isMobile?9:10 }}>
                     {p.propietario && (
-                      <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                        <div style={{ width:18, height:18, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff' }}>{iniciales(p.propietario)}</div>
-                        <span style={{ fontSize:11, color:C.muted }}>{p.propietario.split(' ')[0]}</span>
+                      <div style={{ display:'flex', alignItems:'center', gap:3 }}>
+                        <div style={{ width:16, height:16, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:'#fff' }}>{iniciales(p.propietario)}</div>
+                        <span style={{ color:C.muted }}>{p.propietario.split(' ')[0]}</span>
                       </div>
                     )}
-                    {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{p.prioridad}</span>}
-                    {p.desarrollo && (() => { const isVF=norm(p.desarrollo)==='vodafone'; return <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:isVF?'#e8001c18':'#1a5fe318', color:isVF?'#b30016':'#1244a8' }}>{p.desarrollo}</span> })()}
-                    {p.fechaInicio && <span style={{ fontSize:10, color:C.muted }}>Inicio: {fmtFecha(fdStr(p.fechaInicio))}</span>}
-                    {diasLabel && <span style={{ fontSize:10, fontWeight:dias!==null&&dias<=7?700:400, color:diasColor }}>{diasLabel}</span>}
-                    <span style={{ fontSize:10, color:C.muted, marginLeft:'auto' }}>
-                      {temas.length} tema{temas.length!==1?'s':''}
-                      {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
+                    {p.prioridad && <span style={{ fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, background:pc.bg, color:pc.color }}>{p.prioridad}</span>}
+                    {p.desarrollo && (() => { const isVF=norm(p.desarrollo)==='vodafone'; return <span style={{ fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, background:isVF?'#e8001c18':'#1a5fe318', color:isVF?'#b30016':'#1244a8' }}>{p.desarrollo}</span> })()}
+                    {p.fechaInicio && <span style={{ color:C.muted }}>Inicio: {fmtFecha(fdStr(p.fechaInicio))}</span>}
+                    {diasLabel && <span style={{ fontWeight:dias!==null&&dias<=7?700:400, color:diasColor }}>{diasLabel}</span>}
+                    <span style={{ color:C.muted, marginLeft:'auto' }}>
+                      {temas.length}t{blocked>0&&<span style={{ color:'#f43f5e' }}>·{blocked}b</span>}
                     </span>
                   </div>
                   {p.fase && (() => {
                     const pct = fasePct(p.fase)
                     return (
-                      <div style={{ marginBottom:8 }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
-                          <span style={{ fontSize:9, color:C.muted }}>{lang==='en'?faseLabel(p.fase,'en'):p.fase}</span>
-                          <span style={{ fontSize:9, fontWeight:700, color:C.accent }}>{pct}%</span>
+                      <div style={{ marginBottom:6 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
+                          <span style={{ fontSize:isMobile?8:9, color:C.muted }}>{lang==='en'?faseLabel(p.fase,'en'):p.fase}</span>
+                          <span style={{ fontSize:isMobile?8:9, fontWeight:700, color:C.accent }}>{pct}%</span>
                         </div>
-                        <div style={{ height:3, background:C.border, borderRadius:2 }}>
-                          <div style={{ height:'100%', width:`${pct}%`, background:C.accent, borderRadius:2 }} />
+                        <div style={{ height:2, background:C.border, borderRadius:1 }}>
+                          <div style={{ height:'100%', width:`${pct}%`, background:C.accent, borderRadius:1 }} />
                         </div>
                       </div>
                     )
@@ -2055,6 +2062,50 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
         )
 
         /* Vista Lista */
+        if (isMobile) {
+          // Mobile: simplified list layout
+          return (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {projRows.length === 0
+                ? <div style={{ padding:24, textAlign:'center', color:C.muted, fontSize:13, background:C.card, borderRadius:10 }}>Sin proyectos</div>
+                : projRows.map(({ p, temas, blocked, pct, oc, accentCol, pc, dias, diasColor, diasLabel }) => (
+                  <div key={p.id} onClick={() => setModalProy(p)}
+                    style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px', cursor:'pointer' }}>
+                    <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:8 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>{p.nombre}</div>
+                        <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap', fontSize:11 }}>
+                          <Tag id={p.status} type="st" />
+                          {p.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{p.prioridad}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:11, color:C.muted, marginBottom:8 }}>
+                      {p.propietario && (
+                        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                          <div style={{ width:16, height:16, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:'#fff' }}>{iniciales(p.propietario)}</div>
+                          <span>{p.propietario.split(' ')[0]}</span>
+                        </div>
+                      )}
+                      <span>•</span>
+                      <span>{temas.length} tema{temas.length!==1?'s':''}</span>
+                      {blocked > 0 && <span style={{ color:'#f43f5e' }}> · {blocked}b</span>}
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <div style={{ flex:1, height:4, background:C.surface, borderRadius:2, overflow:'hidden' }}>
+                        <div style={{ width:`${pct}%`, height:'100%', background:accentCol }} />
+                      </div>
+                      <span style={{ fontSize:10, fontWeight:700, color:accentCol }}>{pct}%</span>
+                    </div>
+                    {diasLabel && <div style={{ fontSize:10, fontWeight:dias!==null&&dias<=7?700:400, color:diasColor, marginTop:6 }}>{diasLabel}</div>}
+                  </div>
+                ))
+              }
+            </div>
+          )
+        }
+
+        // Desktop: full table layout
         return (
           <div style={{ background:C.card, borderRadius:10, border:`1px solid ${C.border}`, overflow:'hidden' }}>
             <div style={{ display:'grid', gridTemplateColumns:'2fr 100px 70px 130px 80px 80px 100px', padding:'8px 14px', borderBottom:`1px solid ${C.border}`, fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'.05em' }}>
