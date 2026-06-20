@@ -1180,6 +1180,14 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   const [editFase,       setEditFase]       = useState(proyectoOrig.fase || '')
   const [editCapex,      setEditCapex]      = useState(proyectoOrig.capex!=null?String(proyectoOrig.capex):'')
   const [editNombreEN,   setEditNombreEN]   = useState(proyectoOrig.nombreEN || '')
+  const [w,            setW]            = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const isMobile = w < 768
+
+  useEffect(() => {
+    const h = () => setW(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
 
   useEffect(() => {
     const h = e => e.key === 'Escape' && (editing ? setEditing(false) : onClose())
@@ -1234,7 +1242,7 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
   const inputSt = { background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:isMobile?8:16, overflowY:'auto' }}
       onClick={e => e.target===e.currentTarget&&onClose()}>
       <style>{`
         @keyframes modalProjIn{from{opacity:0;transform:scale(0.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
@@ -1244,15 +1252,16 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
         .add-tema-btn:hover{border-color:#e8243b!important;color:#e8243b!important}
       `}</style>
       <div style={{
-        background:C.surface, borderRadius:14, border:`1px solid ${C.border}`,
-        width:'100%', maxWidth:800, maxHeight:'91vh', overflow:'hidden',
+        background:C.surface, borderRadius:isMobile?12:14, border:`1px solid ${C.border}`,
+        width:'100%', maxWidth:isMobile?'100%':800, maxHeight:isMobile?'100vh':'91vh', overflow:'hidden',
         display:'flex', flexDirection:'column',
         animation:'modalProjIn 220ms cubic-bezier(0.23,1,0.32,1) both',
         boxShadow:'0 8px 40px rgba(0,0,0,.15)',
+        margin:isMobile?'auto 0':undefined,
       }}>
         {/* Header */}
-        <div style={{ padding:'16px 20px 14px', borderBottom:`1px solid ${C.border}`, background:C.card }}>
-          <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+        <div style={{ padding:isMobile?'12px 14px 10px':'16px 20px 14px', borderBottom:`1px solid ${C.border}`, background:C.card, overflowY:'auto', maxHeight:isMobile?'40vh':'none' }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:isMobile?8:12 }}>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5, flexWrap:'wrap' }}>
                 <span style={{ fontSize:16, fontWeight:700, color:C.text, lineHeight:1.2 }}>{proyecto.nombre}</span>
@@ -1797,15 +1806,16 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
 }
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
-const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang='es' }) => {
-  const [filtSt,          setFiltSt]          = useState('all')
-  const [showSinProyecto, setShowSinProyecto] = useState(false)
-  const [showBacklog,     setShowBacklog]     = useState(false)
-  const [activarProyId,   setActivarProyId]   = useState(null)
-  const [activarProySt,   setActivarProySt]   = useState('pending')
-  const [modalProy,       setModalProy]       = useState(null)
-  const [modo,            setModo]            = useState('cards')
-  const [w, setW]         = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onItemChange, lang='es' }) => {
+  const [filtSt,              setFiltSt]              = useState('all')
+  const [showSinProyecto,     setShowSinProyecto]     = useState(false)
+  const [showBacklog,         setShowBacklog]         = useState(false)
+  const [activarProyId,       setActivarProyId]       = useState(null)
+  const [activarProySt,       setActivarProySt]       = useState('pending')
+  const [modalProy,           setModalProy]           = useState(null)
+  const [modo,                setModo]                = useState('cards')
+  const [expandedForProject,  setExpandedForProject]  = useState(null)
+  const [w, setW]             = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
   const isMobile = w < 768
 
   useEffect(() => {
@@ -1895,10 +1905,18 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
         </div>
       </div>
 
-      {/* Sin proyecto collapsible */}
+      {/* Sin proyecto collapsible - MEJORADO: Asignable interactivo */}
       {(() => {
         const sinProy = allItems.filter(i => !i.proyecto || !i.proyecto.trim())
         if (sinProy.length === 0) return null
+
+        const asignarAlProyecto = (temaId, nombreProyecto) => {
+          const tema = sinProy.find(t => t.id === temaId)
+          if (!tema) return
+          onItemChange?.(temaId, { proyecto: nombreProyecto })
+          setExpandedForProject(null)
+        }
+
         return (
           <div style={{ marginBottom:18 }}>
             <button onClick={() => setShowSinProyecto(p => !p)}
@@ -1913,13 +1931,36 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, lang=
                 {sinProy.map((t, i) => {
                   const st  = ST.find(s=>s.id===t.status)
                   const cat = CATS.find(c=>c.id===t.category)
+                  const isExpanded = expandedForProject === t.id
                   return (
-                    <div key={t.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12, animation:`rowIn 220ms ease-out ${i*20}ms both` }}>
-                      <div style={{ width:3, height:16, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
-                      <span style={{ flex:1, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
-                      <Tag id={t.category} type="cat" />
-                      <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
-                      <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{(t.propietario||'').split(' ')[0]}</span>
+                    <div key={t.id} style={{ animation:`rowIn 220ms ease-out ${i*20}ms both` }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12 }}>
+                        <div style={{ width:3, height:16, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
+                        <span style={{ flex:1, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
+                        <Tag id={t.category} type="cat" />
+                        <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
+                        <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{(t.propietario||'').split(' ')[0]}</span>
+                        <button onClick={() => setExpandedForProject(isExpanded ? null : t.id)}
+                          style={{ fontSize:10, padding:'3px 8px', borderRadius:4, border:`1px solid ${C.border}`, background:isExpanded?C.accent+'22':C.card, color:isExpanded?C.accent:C.muted, cursor:'pointer', fontWeight:600, whiteSpace:'nowrap' }}>
+                          {isExpanded ? '✕' : '➕ Asignar'}
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div style={{ display:'flex', flexDirection:'column', gap:4, padding:'8px 16px 10px', background:C.card+'99', borderBottom:`1px solid ${C.border}44` }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase' }}>Asignar a proyecto:</div>
+                          <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                            {proyectos.filter(p => p.status !== 'backlog').map(p => (
+                              <button key={p.id}
+                                onClick={() => asignarAlProyecto(t.id, p.nombre)}
+                                style={{ fontSize:10, padding:'4px 10px', borderRadius:5, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:500, transition:'all 120ms ease-out' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = C.accent+'22'; e.currentTarget.style.borderColor = C.accent }}
+                                onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.borderColor = C.border }}>
+                                {p.nombre}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -3890,7 +3931,7 @@ export default function OpsBoard() {
                   owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                   onNuevo={() => setShowNuevo(true)} />
               )}
-              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} lang={lang} />}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
