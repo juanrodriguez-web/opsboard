@@ -322,7 +322,7 @@ const Toast = ({ msg, type = 'success', onHide }) => {
 }
 
 // ── Tarjeta ──────────────────────────────────────────────────────────────────
-const Tarjeta = ({ item, onClick, onNextSt }) => {
+const Tarjeta = ({ item, onClick, onNextSt, onUnify }) => {
   const cat       = CATS.find(c => c.id === item.category)
   const nextIdx   = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
   const nextId    = ST[nextIdx].id
@@ -419,15 +419,26 @@ const Tarjeta = ({ item, onClick, onNextSt }) => {
           </button>
         )}
         {!isDone && item.status !== 'backlog' && (
-          <button
-            title={`Avanzar a: ${nextSt.label}`}
-            aria-label={`Cambiar estado a ${nextSt.label}`}
-            onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
-            style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#6b6862', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
-            onMouseEnter={e => { e.currentTarget.style.background=C.accent; e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color='#fff' }}
-            onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#6b6862' }}>
-            →
-          </button>
+          <>
+            <button
+              title="Unificar con otro tema"
+              aria-label="Unificar tema"
+              onClick={e => { e.stopPropagation(); onUnify?.(item) }}
+              style={{ width:22, height:22, borderRadius:6, border:'1px solid #cbd5e1', background:'#f1f5f9', color:'#64748b', fontSize:12, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.background='#dbeafe'; e.currentTarget.style.borderColor='#0284c7'; e.currentTarget.style.color='#0284c7'; e.currentTarget.style.fontWeight='700' }}
+              onMouseLeave={e => { e.currentTarget.style.background='#f1f5f9'; e.currentTarget.style.borderColor='#cbd5e1'; e.currentTarget.style.color='#64748b'; e.currentTarget.style.fontWeight='400' }}>
+              🔗
+            </button>
+            <button
+              title={`Avanzar a: ${nextSt.label}`}
+              aria-label={`Cambiar estado a ${nextSt.label}`}
+              onClick={e => { e.stopPropagation(); onNextSt(item.id, nextId) }}
+              style={{ width:22, height:22, borderRadius:6, border:'1px solid #e4e1db', background:'#fbfaf8', color:'#6b6862', fontSize:13, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.background=C.accent; e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color='#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.background='#fbfaf8'; e.currentTarget.style.borderColor='#e4e1db'; e.currentTarget.style.color='#6b6862' }}>
+              →
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -476,7 +487,8 @@ const TableroKPIStrip = ({ items }) => {
 }
 
 // ── Tablero ──────────────────────────────────────────────────────────────────
-const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo }) => {
+const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo, onUnifyTema }) => {
+  const [unifyModal, setUnifyModal] = useState(null)
   const [search,      setSearch]      = useState('')
   const [priF,        setPriF]        = useState('all')
   const [alertasOnly, setAlertasOnly] = useState(false)
@@ -633,7 +645,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
                 <div style={{ minHeight:60 }}>
                   {col.length === 0
                     ? <div style={{ border:`2px dashed ${C.border}`, borderRadius:8, padding:'18px 12px', textAlign:'center', color:C.muted, fontSize:11 }}>Vacío</div>
-                    : col.map(item => <Tarjeta key={item.id} item={item} onClick={setItem} onNextSt={onNextSt} />)}
+                    : col.map(item => <Tarjeta key={item.id} item={item} onClick={setItem} onNextSt={onNextSt} onUnify={setUnifyModal} />)}
                 </div>
               </div>
             )
@@ -734,6 +746,32 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
             )
           })}
         </div>
+      )}
+
+      {/* Modal de unificación */}
+      {unifyModal && (
+        <ModalUnificar
+          tipo="tema"
+          item={unifyModal}
+          allItems={items}
+          onClose={() => setUnifyModal(null)}
+          onUnify={({ destinoId, tituloConservado, fusionarNotas }) => {
+            const destinoItem = items.find(i => i.id === destinoId)
+            if (!destinoItem) return
+
+            const tituloFinal = tituloConservado === 'origen' ? unifyModal.tema : destinoItem.tema
+            let notasFinal = unifyModal.notas || ''
+
+            if (fusionarNotas && destinoItem.notas && destinoItem.notas !== unifyModal.notas) {
+              const ts = new Date().toLocaleDateString('es-ES')
+              notasFinal = `${notasFinal}\n\n[${ts}] Unificado con: "${destinoItem.tema}"\n${destinoItem.notas}`
+            }
+
+            // Actualizar tema destino con nuevo título y notas
+            onUnifyTema?.(unifyModal.id, destinoId, tituloFinal, notasFinal)
+            setUnifyModal(null)
+          }}
+        />
       )}
     </div>
   )
@@ -1511,6 +1549,184 @@ const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, o
       </div>
     </div>
   )
+}
+
+// ── Modal de Unificación ────────────────────────────────────────────────────────
+const ModalUnificar = ({ tipo, item, allItems, onClose, onUnify, lang='es' }) => {
+  const [destino, setDestino] = useState(null)
+  const [tituloConservado, setTituloConservado] = useState('origen')
+  const [fusionarNotas, setFusionarNotas] = useState(true)
+
+  if (tipo === 'tema') {
+    const similares = allItems.filter(i =>
+      i.id !== item.id &&
+      (norm(i.tema).includes(norm(item.tema.split(' ')[0])) || norm(item.tema).includes(norm(i.tema.split(' ')[0])))
+    )
+
+    if (similares.length === 0) {
+      return (
+        <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+          <div onClick={e => e.stopPropagation()} style={{ background:C.card, borderRadius:12, padding:24, maxWidth:400, textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>🔍</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:8 }}>No hay temas similares</div>
+            <p style={{ fontSize:12, color:C.muted, marginBottom:16 }}>No encontramos otros temas que pudieran ser duplicados de este.</p>
+            <button onClick={onClose} style={{ padding:'8px 16px', borderRadius:6, background:C.accent, color:'#fff', border:'none', cursor:'pointer', fontWeight:600 }}>Cerrar</button>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+        <div onClick={e => e.stopPropagation()} style={{ background:C.card, borderRadius:12, border:`1px solid ${C.border}`, maxWidth:500, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,.15)' }}>
+          <div style={{ padding:'20px', borderBottom:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>🔗 Unificar tema</div>
+            <p style={{ fontSize:12, color:C.muted, margin:0 }}>Selecciona otro tema para unificar con "{item.tema}"</p>
+          </div>
+
+          <div style={{ padding:'16px' }}>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:8 }}>Tema a unificar con:</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {similares.map(s => (
+                  <button key={s.id}
+                    onClick={() => setDestino(s.id)}
+                    style={{ padding:'12px', borderRadius:8, border:`2px solid ${destino===s.id?C.accent:C.border}`, background:destino===s.id?C.accent+'11':C.surface, cursor:'pointer', textAlign:'left', transition:'all 120ms ease' }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:destino===s.id?C.accent:C.text }}>{s.tema}</div>
+                    <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>Estado: {ST.find(st=>st.id===s.status)?.label} • {s.propietario?.split(' ')[0]||'—'}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {destino && (
+              <>
+                <div style={{ marginBottom:16, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:8 }}>Título a conservar:</div>
+                  <div style={{ display:'flex', gap:12 }}>
+                    {[
+                      { id:'origen', label:`"${item.tema}" (actual)` },
+                      { id:'destino', label:`"${allItems.find(i=>i.id===destino)?.tema}" (destino)` }
+                    ].map(opt => (
+                      <label key={opt.id} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'6px 0' }}>
+                        <input type="radio" checked={tituloConservado===opt.id} onChange={() => setTituloConservado(opt.id)} style={{ cursor:'pointer' }} />
+                        <span style={{ fontSize:12, color:C.text }}>{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom:16, paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+                    <input type="checkbox" checked={fusionarNotas} onChange={e => setFusionarNotas(e.target.checked)} style={{ cursor:'pointer' }} />
+                    <span style={{ fontSize:12, color:C.text }}>Fusionar notas y comentarios</span>
+                  </label>
+                  <p style={{ fontSize:11, color:C.muted, margin:'6px 0 0', paddingLeft:24 }}>Las notas de ambos temas se combinarán preservando fechas</p>
+                </div>
+              </>
+            )}
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={onClose} style={{ padding:'8px 16px', borderRadius:6, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:600 }}>Cancelar</button>
+              <button
+                onClick={() => destino && onUnify({ destinoId:destino, tituloConservado, fusionarNotas })}
+                disabled={!destino}
+                style={{ padding:'8px 16px', borderRadius:6, background:destino?C.accent:'#e8e5df', color:destino?'#fff':C.muted, border:'none', cursor:destino?'pointer':'not-allowed', fontWeight:600 }}>
+                ✓ Unificar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Para proyectos
+  if (tipo === 'proyecto') {
+    const similares = allItems.filter(i =>
+      i.id !== item.id &&
+      (norm(i.nombre).includes(norm(item.nombre.split(' ')[0])) || norm(item.nombre).includes(norm(i.nombre.split(' ')[0])))
+    )
+
+    if (similares.length === 0) {
+      return (
+        <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+          <div onClick={e => e.stopPropagation()} style={{ background:C.card, borderRadius:12, padding:24, maxWidth:400, textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>🔍</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:8 }}>No hay proyectos similares</div>
+            <p style={{ fontSize:12, color:C.muted, marginBottom:16 }}>No encontramos otros proyectos que pudieran ser duplicados de este.</p>
+            <button onClick={onClose} style={{ padding:'8px 16px', borderRadius:6, background:C.accent, color:'#fff', border:'none', cursor:'pointer', fontWeight:600 }}>Cerrar</button>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+        <div onClick={e => e.stopPropagation()} style={{ background:C.card, borderRadius:12, border:`1px solid ${C.border}`, maxWidth:500, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,.15)' }}>
+          <div style={{ padding:'20px', borderBottom:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>🔗 Unificar proyecto</div>
+            <p style={{ fontSize:12, color:C.muted, margin:0 }}>Selecciona otro proyecto para unificar con "{item.nombre}"</p>
+          </div>
+
+          <div style={{ padding:'16px' }}>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:8 }}>Proyecto a unificar con:</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {similares.map(s => (
+                  <button key={s.id}
+                    onClick={() => setDestino(s.id)}
+                    style={{ padding:'12px', borderRadius:8, border:`2px solid ${destino===s.id?C.accent:C.border}`, background:destino===s.id?C.accent+'11':C.surface, cursor:'pointer', textAlign:'left', transition:'all 120ms ease' }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:destino===s.id?C.accent:C.text }}>{s.nombre}</div>
+                    <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>Estado: {ST.find(st=>st.id===s.status)?.label} • {s.propietario?.split(' ')[0]||'—'}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {destino && (
+              <>
+                <div style={{ marginBottom:16, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:8 }}>Nombre a conservar:</div>
+                  <div style={{ display:'flex', gap:12 }}>
+                    {[
+                      { id:'origen', label:`"${item.nombre}" (actual)` },
+                      { id:'destino', label:`"${allItems.find(i=>i.id===destino)?.nombre}" (destino)` }
+                    ].map(opt => (
+                      <label key={opt.id} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'6px 0' }}>
+                        <input type="radio" checked={tituloConservado===opt.id} onChange={() => setTituloConservado(opt.id)} style={{ cursor:'pointer' }} />
+                        <span style={{ fontSize:12, color:C.text }}>{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom:16, paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+                    <input type="checkbox" checked={fusionarNotas} onChange={e => setFusionarNotas(e.target.checked)} style={{ cursor:'pointer' }} />
+                    <span style={{ fontSize:12, color:C.text }}>Fusionar descripción y notas</span>
+                  </label>
+                  <p style={{ fontSize:11, color:C.muted, margin:'6px 0 0', paddingLeft:24 }}>Las notas de ambos proyectos se combinarán preservando fechas</p>
+                </div>
+              </>
+            )}
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={onClose} style={{ padding:'8px 16px', borderRadius:6, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:600 }}>Cancelar</button>
+              <button
+                onClick={() => destino && onUnify({ destinoId:destino, tituloConservado, fusionarNotas })}
+                disabled={!destino}
+                style={{ padding:'8px 16px', borderRadius:6, background:destino?C.accent:'#e8e5df', color:destino?'#fff':C.muted, border:'none', cursor:destino?'pointer':'not-allowed', fontWeight:600 }}>
+                ✓ Unificar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }
 
 // ── ProjectDetailView (Nueva vista detallada de proyecto) ──────────────────────
@@ -3694,6 +3910,21 @@ export default function OpsBoard() {
   const onProyUpdate = (nombre, fields) =>
     setProyectos(prev => prev.map(p => norm(p.nombre)===norm(nombre) ? {...p,...fields,_hasLocalProy:true} : p))
 
+  const onUnifyTema = (temaViejoId, temaDestId, tituloFinal, notasFinal) => {
+    // Actualizar tema destino
+    setAllItems(prev => prev.map(i => {
+      if (i.id === temaDestId) {
+        return { ...i, tema: tituloFinal, notas: notasFinal, _hasLocal: true }
+      }
+      return i
+    }))
+    // Eliminar tema viejo
+    setAllItems(prev => prev.filter(i => i.id !== temaViejoId))
+    // Guardar en Supabase
+    supabase.from('items').update({ tema: tituloFinal, notas: notasFinal }).eq('id', temaDestId).catch(e => console.error('[onUnifyTema update]', e))
+    supabase.from('items').delete().eq('id', temaViejoId).catch(e => console.error('[onUnifyTema delete]', e))
+  }
+
   useEffect(() => {
     // Items ya completados en el sheet → timestamp de hace 8 días → van directo a Histórico
     const OLD_TS = Date.now() - 8 * 86400000
@@ -3929,7 +4160,7 @@ export default function OpsBoard() {
               {vista === 'Tablero' && (
                 <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
                   owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
-                  onNuevo={() => setShowNuevo(true)} />
+                  onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} />
               )}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
