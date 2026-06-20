@@ -2180,22 +2180,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
                       {isExpanded && (
                         <div style={{ display:'flex', flexDirection:'column', gap:6, padding:'8px 16px 10px', background:C.card+'99', borderBottom:`1px solid ${C.border}44` }}>
                           <div>
-                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:6 }}>Asignar a proyecto:</div>
-                            <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                              {proyectos.filter(p => p.status !== 'backlog').map(p => (
-                                <button key={p.id}
-                                  onClick={() => asignarAlProyecto(t.id, p.nombre)}
-                                  style={{ fontSize:10, padding:'4px 10px', borderRadius:5, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:500, transition:'all 120ms ease-out' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = C.accent+'22'; e.currentTarget.style.borderColor = C.accent }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.borderColor = C.border }}>
-                                  {p.nombre}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div style={{ paddingTop:4, borderTop:`1px solid ${C.border}44` }}>
-                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:6 }}>O marcar como:</div>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:6 }}>Clasificar:</div>
                             <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                               <button
                                 onClick={() => marcarBauOSinProyecto(t.id, 'bau')}
@@ -2215,6 +2200,21 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
                             <p style={{ fontSize:9, color:C.muted, margin:'4px 0 0', lineHeight:1.4 }}>
                               El tema desaparecerá de aquí y se marcará con una nota
                             </p>
+                          </div>
+
+                          <div style={{ paddingTop:6, borderTop:`1px solid ${C.border}44` }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:6 }}>O asignar a proyecto:</div>
+                            <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                              {proyectos.filter(p => p.status !== 'backlog').map(p => (
+                                <button key={p.id}
+                                  onClick={() => asignarAlProyecto(t.id, p.nombre)}
+                                  style={{ fontSize:10, padding:'4px 10px', borderRadius:5, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:500, transition:'all 120ms ease-out' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = C.accent+'22'; e.currentTarget.style.borderColor = C.accent }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.borderColor = C.border }}>
+                                  {p.nombre}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}
