@@ -2190,6 +2190,14 @@ const IAIntake = ({ onAdd, allItems = [] }) => {
   const [busy, setBusy]       = useState(false)
   const [pending, setPending] = useState(null)
   const [err, setErr]         = useState('')
+  const [w, setW]             = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const isMobile = w < 768
+
+  useEffect(() => {
+    const h = () => setW(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
 
   const run = async () => {
     if (!txt.trim()) return
@@ -2240,23 +2248,23 @@ const IAIntake = ({ onAdd, allItems = [] }) => {
   const addCount  = (pending?.length || 0) - skipCount
 
   return (
-    <div style={{ paddingTop:16, maxWidth:760 }}>
-      <h2 style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>✨ IA Intake</h2>
-      <p style={{ fontSize:13, color:C.muted, marginBottom:14 }}>Pega un email, nota o acta. La IA detecta las tareas automáticamente.</p>
-      <TA value={txt} onChange={setTxt} placeholder="Pega aquí el texto..." rows={6} style={{ marginBottom:10 }} />
-      <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+    <div style={{ paddingTop:isMobile?8:16, maxWidth:isMobile?'100%':760 }}>
+      <h2 style={{ fontSize:isMobile?15:16, fontWeight:700, color:C.text, marginBottom:3 }}>✨ IA Intake</h2>
+      <p style={{ fontSize:isMobile?12:13, color:C.muted, marginBottom:isMobile?10:14 }}>Pega un email, nota o acta. La IA detecta las tareas automáticamente.</p>
+      <TA value={txt} onChange={setTxt} placeholder="Pega aquí el texto..." rows={isMobile?5:6} style={{ marginBottom:10, fontSize:isMobile?14:16 }} />
+      <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
         <Btn onClick={run} disabled={busy||!txt.trim()}>{busy?'⏳ Analizando…':'✨ Detectar tareas'}</Btn>
         {txt && <Btn v="sec" onClick={() => { setTxt(''); setPending(null) }}>Limpiar</Btn>}
       </div>
-      {err && <div style={{ color:'#f43f5e', fontSize:13, marginBottom:12, whiteSpace:'pre-wrap' }}>{err}</div>}
+      {err && <div style={{ color:'#f43f5e', fontSize:isMobile?12:13, marginBottom:12, whiteSpace:'pre-wrap', lineHeight:1.4 }}>{err}</div>}
       {pending && (
         <div>
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-            <span style={{ fontSize:11, fontWeight:700, color:C.muted }}>
+          <div style={{ display:'flex', alignItems:'center', gap:isMobile?6:10, marginBottom:12, flexWrap:'wrap' }}>
+            <span style={{ fontSize:isMobile?10:11, fontWeight:700, color:C.muted }}>
               {pending.length} tarea{pending.length!==1?'s':''} detectada{pending.length!==1?'s':''}
             </span>
             {dupCount > 0 && (
-              <span style={{ fontSize:11, color:'#92400e', background:'#fef3c7', border:'1px solid #fde68a', borderRadius:5, padding:'1px 7px', fontWeight:600 }}>
+              <span style={{ fontSize:isMobile?10:11, color:'#92400e', background:'#fef3c7', border:'1px solid #fde68a', borderRadius:4, padding:isMobile?'1px 6px':'1px 7px', fontWeight:600 }}>
                 ⚠ {dupCount} posible{dupCount!==1?'s':''} duplicado{dupCount!==1?'s':''}
               </span>
             )}
@@ -2269,29 +2277,29 @@ const IAIntake = ({ onAdd, allItems = [] }) => {
               <div key={idx} style={{
                 background: item.skip ? C.surface : C.card,
                 borderLeft:`3px solid ${bdColor}`,
-                borderRadius:8, padding:14, marginBottom:8,
+                borderRadius:8, padding:isMobile?10:14, marginBottom:8,
                 border:`1px solid ${item.skip ? '#e5e7eb' : hasDup ? '#fde68a' : C.border}`,
                 opacity: item.skip ? 0.45 : 1,
                 transition:'opacity 150ms',
               }}>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:9 }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:isMobile?6:9 }}>
                   <input type="checkbox" checked={!item.skip} onChange={() => toggleSkip(idx)}
                     title={item.skip ? 'Incluir' : 'Omitir este item'}
                     style={{ marginTop:2, cursor:'pointer', accentColor:C.accent, flexShrink:0 }} />
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:4, flexWrap:'wrap' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:3, flexWrap:'wrap' }}>
                       <Tag id={item.category} type="cat" />
-                      <span style={{ fontSize:13.5, fontWeight:600, color: item.skip ? C.muted : C.text }}>{item.title}</span>
+                      <span style={{ fontSize:isMobile?12.5:13.5, fontWeight:600, color: item.skip ? C.muted : C.text }}>{item.title}</span>
                       <Dot risk={item.risk} />
                     </div>
                     {item.description && !item.skip && (
-                      <p style={{ fontSize:12, color:C.muted, margin:0, marginBottom: hasDup ? 6 : 0 }}>{item.description}</p>
+                      <p style={{ fontSize:isMobile?11:12, color:C.muted, margin:0, marginBottom: hasDup ? 6 : 0, lineHeight:1.4 }}>{item.description}</p>
                     )}
                     {hasDup && !item.skip && (
-                      <div style={{ display:'flex', alignItems:'flex-start', gap:5, marginTop:5,
-                        background:'#fffbeb', border:'1px solid #fde68a', borderRadius:5, padding:'5px 8px' }}>
-                        <span style={{ fontSize:12, flexShrink:0 }}>⚠</span>
-                        <div style={{ fontSize:11.5, color:'#92400e', lineHeight:1.4 }}>
+                      <div style={{ display:'flex', alignItems:'flex-start', gap:4, marginTop:5,
+                        background:'#fffbeb', border:'1px solid #fde68a', borderRadius:4, padding:isMobile?'4px 6px':'5px 8px' }}>
+                        <span style={{ fontSize:isMobile?11:12, flexShrink:0 }}>⚠</span>
+                        <div style={{ fontSize:isMobile?10.5:11.5, color:'#92400e', lineHeight:1.4 }}>
                           <span style={{ fontWeight:600 }}>Ya existe algo similar: </span>
                           {item.similar.map((s,si) => (
                             <span key={si}>
@@ -2308,10 +2316,10 @@ const IAIntake = ({ onAdd, allItems = [] }) => {
               </div>
             )
           })}
-          <div style={{ display:'flex', gap:8, marginTop:14, alignItems:'center' }}>
+          <div style={{ display:'flex', gap:8, marginTop:14, alignItems:'center', flexWrap:'wrap' }}>
             <Btn onClick={confirmar} disabled={addCount===0}>✓ Añadir {addCount} al tablero</Btn>
             <Btn v="sec" onClick={() => setPending(null)}>Cancelar</Btn>
-            {skipCount > 0 && <span style={{ fontSize:11, color:C.muted }}>{skipCount} omitida{skipCount!==1?'s':''}</span>}
+            {skipCount > 0 && <span style={{ fontSize:isMobile?10:11, color:C.muted }}>{skipCount} omitida{skipCount!==1?'s':''}</span>}
           </div>
         </div>
       )}
