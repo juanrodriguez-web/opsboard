@@ -15,6 +15,18 @@ const { createClient } = require('@supabase/supabase-js')
 // CONFIGURACIÓN
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Cargar .env.local si existe
+const dotenv = require('dotenv')
+const envPath = path.join(__dirname, '..', '.env.local')
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath })
+}
+
+// Mapear CLAUDE_API_KEY a ANTHROPIC_API_KEY si existe
+if (process.env.CLAUDE_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+  process.env.ANTHROPIC_API_KEY = process.env.CLAUDE_API_KEY
+}
+
 const INTAKE_FOLDER = path.join(
   process.env.USERPROFILE || process.env.HOME,
   'OneDrive - Sercom Soluciones S.L',
@@ -24,12 +36,15 @@ const INTAKE_FOLDER = path.join(
 const PROCESSED_FOLDER = path.join(INTAKE_FOLDER, '.processed')
 const LOG_FILE = path.join(INTAKE_FOLDER, '.process-log.json')
 
-// Supabase
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
+// Supabase - intentar desde variables de entorno (prefijo VITE_ o sin prefijo)
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Variables de entorno Supabase no encontradas')
+  console.error('   Verifica que .env.local existe con:')
+  console.error('   - VITE_SUPABASE_URL')
+  console.error('   - VITE_SUPABASE_ANON_KEY')
   process.exit(1)
 }
 
@@ -135,6 +150,20 @@ const readFile = (filePath) => {
 
 const analyzeWithClaude = async (fileContent, items, proyectos) => {
   const { Anthropic } = require('@anthropic-ai/sdk')
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    log('ERROR: ANTHROPIC_API_KEY no configurada', 'error')
+    log('', 'error')
+    log('Solucion:', 'error')
+    log('1. Obtén tu API key en: https://console.anthropic.com/account/keys', 'error')
+    log('2. Ejecuta: vercel env add CLAUDE_API_KEY', 'error')
+    log('3. Selecciona "development" cuando pregunte', 'error')
+    log('4. Pega tu API key (empieza con "sk-ant-")', 'error')
+    log('5. Intenta de nuevo: npm run process-intake', 'error')
+    log('', 'error')
+    return null
+  }
+
   const client = new Anthropic()
 
   const itemList = items
