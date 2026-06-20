@@ -509,7 +509,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
       <TableroKPIStrip items={f} />
 
       {/* ── Filter bar ── */}
-      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:'8px 12px', marginBottom:12, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding: w < 768 ? '6px 8px' : '8px 12px', marginBottom:12, display:'flex', gap: w < 768 ? 4 : 8, flexWrap:'wrap', alignItems:'center', fontSize: w < 768 ? 10 : 11 }}>
 
         {/* Search */}
         <div style={{ display:'flex', alignItems:'center', gap:6, background:C.surface, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px 10px', flex:1, minWidth:160 }}>
@@ -833,7 +833,7 @@ const Dashboard = ({ allItems }) => {
       </div>
 
       {/* Charts */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
+      <div style={{ display:'grid', gridTemplateColumns: w < 768 ? '1fr' : '1fr 1fr', gap:14, marginBottom:14 }}>
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:18 }}>
           <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:14 }}>
             Carga del equipo (Juan · Francisco)
@@ -3546,7 +3546,21 @@ export default function OpsBoard() {
 
   return (
     <div style={{ display:'flex', height:'100vh', background:C.bg, color:C.text, fontFamily:"'Geist',system-ui,sans-serif", overflow:'hidden' }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}} ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#d6d1c8;border-radius:4px}`}</style>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:#d6d1c8;border-radius:4px}
+
+        /* Mobile responsive globals */
+        @media (max-width: 767px) {
+          * { box-sizing: border-box; }
+          button { min-height: 44px; }
+          input, select, textarea { font-size: 16px; }
+        }
+      `}</style>
 
       {/* ── Sidebar (Desktop: fixed, Mobile: overlay) ──────────────────── */}
       {/* Mobile overlay backdrop */}
@@ -3632,7 +3646,7 @@ export default function OpsBoard() {
       </div>
 
       {/* ── Main column ──────────────────────────────────────────────────── */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', width: isMobile ? '100%' : 'auto', minWidth: 0 }}>
 
         {/* Topbar */}
         <div style={{ height: isMobile ? 52 : 56, background:'#fff', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', padding: isMobile ? '0 12px' : '0 24px', gap: isMobile ? 8 : 16, flexShrink:0 }}>
@@ -3703,7 +3717,7 @@ export default function OpsBoard() {
         </div>
 
         {/* Content */}
-        <div style={{ flex:1, overflow:'auto', padding: isMobile ? 12 : 24, width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ flex:1, overflow:'auto', padding: isMobile ? '8px' : '24px', width: '100%', boxSizing: 'border-box' }}>
           {loading && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:280, gap:12, color:C.muted }}>
               <div style={{ width:32, height:32, borderRadius:'50%', border:`3px solid ${C.border}`, borderTopColor:C.accent, animation:'spin .8s linear infinite' }} />
