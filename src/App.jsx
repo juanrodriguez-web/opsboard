@@ -2121,9 +2121,12 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
         </div>
       </div>
 
-      {/* Sin proyecto collapsible - MEJORADO: Asignable interactivo */}
+      {/* Sin proyecto collapsible - MEJORADO: Asignable interactivo + BAU/Sin proyecto definitivo */}
       {(() => {
-        const sinProy = allItems.filter(i => !i.proyecto || !i.proyecto.trim())
+        const sinProy = allItems.filter(i =>
+          (!i.proyecto || !i.proyecto.trim()) &&
+          !i.skip_proyecto_assignment // Excluir temas marcados como BAU o sin proyecto definitivo
+        )
         if (sinProy.length === 0) return null
 
         const asignarAlProyecto = (temaId, nombreProyecto) => {
@@ -2131,6 +2134,19 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
           if (!tema) return
           onItemChange?.(temaId, { proyecto: nombreProyecto })
           setExpandedForProject(null)
+        }
+
+        const marcarBauOSinProyecto = (temaId, tipo) => {
+          // Marcar como BAU o "Sin proyecto definitivo"
+          const msg = tipo === 'bau'
+            ? '[BAU - Sin asignación de proyecto]'
+            : '[Sin proyecto definitivo]'
+          const notaExistente = allItems.find(t => t.id === temaId)?.notas || ''
+          const notaNueva = notaExistente ? `${notaExistente}\n${msg}` : msg
+          onItemChange?.(temaId, {
+            skip_proyecto_assignment: true,
+            notas: notaNueva
+          })
         }
 
         return (
@@ -2150,7 +2166,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
                   const isExpanded = expandedForProject === t.id
                   return (
                     <div key={t.id} style={{ animation:`rowIn 220ms ease-out ${i*20}ms both` }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 16px', borderBottom:`1px solid ${C.border}44`, fontSize:12, flexWrap:'wrap' }}>
                         <div style={{ width:3, height:16, borderRadius:2, background:cat?.color||C.muted, flexShrink:0 }} />
                         <span style={{ flex:1, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
                         <Tag id={t.category} type="cat" />
@@ -2162,18 +2178,43 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
                         </button>
                       </div>
                       {isExpanded && (
-                        <div style={{ display:'flex', flexDirection:'column', gap:4, padding:'8px 16px 10px', background:C.card+'99', borderBottom:`1px solid ${C.border}44` }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase' }}>Asignar a proyecto:</div>
-                          <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                            {proyectos.filter(p => p.status !== 'backlog').map(p => (
-                              <button key={p.id}
-                                onClick={() => asignarAlProyecto(t.id, p.nombre)}
-                                style={{ fontSize:10, padding:'4px 10px', borderRadius:5, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:500, transition:'all 120ms ease-out' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = C.accent+'22'; e.currentTarget.style.borderColor = C.accent }}
-                                onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.borderColor = C.border }}>
-                                {p.nombre}
+                        <div style={{ display:'flex', flexDirection:'column', gap:6, padding:'8px 16px 10px', background:C.card+'99', borderBottom:`1px solid ${C.border}44` }}>
+                          <div>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:6 }}>Asignar a proyecto:</div>
+                            <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                              {proyectos.filter(p => p.status !== 'backlog').map(p => (
+                                <button key={p.id}
+                                  onClick={() => asignarAlProyecto(t.id, p.nombre)}
+                                  style={{ fontSize:10, padding:'4px 10px', borderRadius:5, border:`1px solid ${C.border}`, background:C.card, color:C.text, cursor:'pointer', fontWeight:500, transition:'all 120ms ease-out' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = C.accent+'22'; e.currentTarget.style.borderColor = C.accent }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.borderColor = C.border }}>
+                                  {p.nombre}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div style={{ paddingTop:4, borderTop:`1px solid ${C.border}44` }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:6 }}>O marcar como:</div>
+                            <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                              <button
+                                onClick={() => marcarBauOSinProyecto(t.id, 'bau')}
+                                style={{ fontSize:9, padding:'4px 10px', borderRadius:5, border:`1px solid #d97706`, background:'#fef3c722', color:'#d97706', cursor:'pointer', fontWeight:600, transition:'all 120ms ease-out', whiteSpace:'nowrap' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#b45309' }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#fef3c722'; e.currentTarget.style.borderColor = '#d97706' }}>
+                                🔄 Es BAU
                               </button>
-                            ))}
+                              <button
+                                onClick={() => marcarBauOSinProyecto(t.id, 'sin_proyecto')}
+                                style={{ fontSize:9, padding:'4px 10px', borderRadius:5, border:`1px solid ${C.muted}`, background:C.surface, color:C.muted, cursor:'pointer', fontWeight:600, transition:'all 120ms ease-out', whiteSpace:'nowrap' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = C.border; e.currentTarget.style.borderColor = C.text }}
+                                onMouseLeave={e => { e.currentTarget.style.background = C.surface; e.currentTarget.style.borderColor = C.muted }}>
+                                ✕ Sin proyecto
+                              </button>
+                            </div>
+                            <p style={{ fontSize:9, color:C.muted, margin:'4px 0 0', lineHeight:1.4 }}>
+                              El tema desaparecerá de aquí y se marcará con una nota
+                            </p>
                           </div>
                         </div>
                       )}
