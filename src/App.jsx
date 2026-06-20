@@ -2604,6 +2604,370 @@ const Historico = ({ items }) => {
   )
 }
 
+// ── Cristina (Reporte Ejecutivo) ───────────────────────────────────────────────
+const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
+  // Filtrar solo items de Juangas
+  const juanItems = items.filter(i =>
+    i.propietario?.includes('Juan') || i.propietario?.includes('Juangas')
+  );
+
+  // ────────────────────────────────────────────────────────────────
+  // CÁLCULOS BÁSICOS
+  // ────────────────────────────────────────────────────────────────
+
+  const hoy = new Date();
+  const inicioSemana = new Date(hoy);
+  inicioSemana.setDate(hoy.getDate() - hoy.getDay()); // Lunes
+
+  // Status rápido
+  const onTrack = juanItems.filter(i => i.estado === 'inprogress').length;
+  const enPeligro = juanItems.filter(i => i.estado === 'blocked').length;
+  const completados = juanItems.filter(i => i.estado === 'done').length;
+  const total = juanItems.length;
+
+  // Lo que cerró esta semana (estado === done Y completedAt >= lunes)
+  const cerradosEstaSemana = juanItems.filter(i => {
+    if (i.estado !== 'done') return false;
+    // Si tienes timestamp de completado, usarlo; si no, aproximar por notas
+    return true; // TODO: ajustar con tu lógica de timestamps
+  });
+
+  // Riesgos y blockers (estado bloqueado + P0/P1)
+  const riesgos = juanItems.filter(i =>
+    i.estado === 'blocked' || (i.estado === 'inprogress' && (i.prioridad === 'P0' || i.prioridad === 'P1'))
+  );
+
+  // Próximos 7 días (estado !== done Y fechaFin < hoy+7d)
+  const proximosSieteDias = juanItems.filter(i => {
+    if (i.estado === 'done') return false;
+    if (!i.fechaFin) return false;
+    const fecha = new Date(i.fechaFin);
+    return fecha >= hoy && fecha <= new Date(hoy.getTime() + 7 * 24 * 60 * 60 * 1000);
+  });
+
+  // Temas P0/P1 en curso o bloqueados
+  const temasAltos = juanItems.filter(i =>
+    (i.prioridad === 'P0' || i.prioridad === 'P1') &&
+    (i.estado === 'inprogress' || i.estado === 'blocked')
+  );
+
+  // ────────────────────────────────────────────────────────────────
+  // RENDER
+  // ────────────────────────────────────────────────────────────────
+
+  const labels = {
+    ES: {
+      titulo: 'Reporte para Cristina',
+      statusRapido: 'STATUS RÁPIDO',
+      onTrack: 'En curso',
+      enPeligro: 'En peligro',
+      completados: 'Completados',
+      estaSemana: 'ESTA SEMANA',
+      cerrado: 'Cerrado',
+      riesgos: 'RIESGOS / BLOCKERS',
+      proximaSemana: 'PRÓXIMA SEMANA (TOP 3)',
+      noData: 'Sin datos',
+      sinRiesgos: 'Sin riesgos identificados ✅',
+      sincronizando: 'Datos de Supabase en tiempo real',
+    },
+    EN: {
+      titulo: 'Report for Cristina',
+      statusRapido: 'QUICK STATUS',
+      onTrack: 'In progress',
+      enPeligro: 'At risk',
+      completados: 'Completed',
+      estaSemana: 'THIS WEEK',
+      cerrado: 'Completed',
+      riesgos: 'RISKS / BLOCKERS',
+      proximaSemana: 'NEXT WEEK (TOP 3)',
+      noData: 'No data',
+      sinRiesgos: 'No risks identified ✅',
+      sincronizando: 'Real-time data from Supabase',
+    }
+  };
+
+  const t = labels[idioma] || labels.ES;
+
+  return (
+    <div style={{
+      padding: '2rem',
+      maxWidth: '1200px',
+      margin: '0 auto',
+      fontFamily: '"Inter", -apple-system, sans-serif',
+      color: '#1f2937',
+      background: '#f9fafb',
+      minHeight: '100vh'
+    }}>
+
+      {/* HEADER */}
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{
+          fontSize: '2rem',
+          fontWeight: '700',
+          margin: '0 0 0.5rem 0',
+          color: '#000'
+        }}>
+          {t.titulo}
+        </h1>
+        <p style={{
+          fontSize: '0.875rem',
+          color: '#6b7280',
+          margin: 0
+        }}>
+          📊 {t.sincronizando} • Última actualización: {hoy.toLocaleTimeString(idioma === 'ES' ? 'es-ES' : 'en-US')}
+        </p>
+      </div>
+
+      {/* GRID PRINCIPAL */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+
+        {/* CARD 1: STATUS RÁPIDO */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          padding: '1.5rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+        }}>
+          <h2 style={{
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            color: '#6b7280',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            margin: '0 0 1rem 0'
+          }}>
+            {t.statusRapido}
+          </h2>
+          <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#6b7280' }}>{t.onTrack}</span>
+              <span style={{
+                fontSize: '1.875rem',
+                fontWeight: '700',
+                color: '#3b82f6'
+              }}>
+                {onTrack}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#6b7280' }}>{t.enPeligro}</span>
+              <span style={{
+                fontSize: '1.875rem',
+                fontWeight: '700',
+                color: enPeligro > 0 ? '#ef4444' : '#10b981'
+              }}>
+                {enPeligro}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#6b7280' }}>{t.completados}</span>
+              <span style={{
+                fontSize: '1.875rem',
+                fontWeight: '700',
+                color: '#10b981'
+              }}>
+                {completados}
+              </span>
+            </div>
+            <div style={{
+              marginTop: '0.75rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between'
+            }}>
+              <span style={{ fontWeight: '600', color: '#000' }}>Total</span>
+              <span style={{ fontWeight: '600', color: '#000' }}>{total} temas</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CARD 2: ESTA SEMANA */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          padding: '1.5rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+        }}>
+          <h2 style={{
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            color: '#6b7280',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            margin: '0 0 1rem 0'
+          }}>
+            {t.estaSemana}
+          </h2>
+          {cerradosEstaSemana.length > 0 ? (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {cerradosEstaSemana.slice(0, 3).map(item => (
+                <li key={item.id} style={{
+                  fontSize: '0.875rem',
+                  padding: '0.5rem 0',
+                  color: '#374151',
+                  display: 'flex',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ color: '#10b981' }}>✓</span>
+                  <span>{item.tema}</span>
+                </li>
+              ))}
+              {cerradosEstaSemana.length > 3 && (
+                <li style={{
+                  fontSize: '0.75rem',
+                  color: '#9ca3af',
+                  paddingTop: '0.5rem',
+                  borderTop: '1px solid #e5e7eb',
+                  marginTop: '0.5rem',
+                  paddingTop: '0.75rem'
+                }}>
+                  +{cerradosEstaSemana.length - 3} más
+                </li>
+              )}
+            </ul>
+          ) : (
+            <p style={{ color: '#9ca3af', fontSize: '0.875rem', margin: 0 }}>
+              {t.noData}
+            </p>
+          )}
+        </div>
+
+        {/* CARD 3: PRÓXIMA SEMANA */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          padding: '1.5rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+        }}>
+          <h2 style={{
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            color: '#6b7280',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            margin: '0 0 1rem 0'
+          }}>
+            {t.proximaSemana}
+          </h2>
+          {proximosSieteDias.length > 0 ? (
+            <ol style={{ margin: 0, padding: '0 0 0 1.5rem' }}>
+              {proximosSieteDias.slice(0, 3).map((item, idx) => (
+                <li key={item.id} style={{
+                  fontSize: '0.875rem',
+                  padding: '0.5rem 0',
+                  color: '#374151'
+                }}>
+                  <strong>{item.tema}</strong>
+                  <br />
+                  <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                    🎯 {item.prioridad || 'Sin prioridad'}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p style={{ color: '#9ca3af', fontSize: '0.875rem', margin: 0 }}>
+              {t.noData}
+            </p>
+          )}
+        </div>
+
+      </div>
+
+      {/* SECCIÓN RIESGOS (ANCHO COMPLETO) */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '0.5rem',
+        padding: '1.5rem',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+      }}>
+        <h2 style={{
+          fontSize: '0.875rem',
+          fontWeight: '600',
+          color: '#6b7280',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          margin: '0 0 1rem 0'
+        }}>
+          ⚠️  {t.riesgos}
+        </h2>
+        {riesgos.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+            {riesgos.map(item => (
+              <div key={item.id} style={{
+                background: item.estado === 'blocked' ? '#fef2f2' : '#fffbeb',
+                border: `1px solid ${item.estado === 'blocked' ? '#fecaca' : '#fde68a'}`,
+                borderLeft: `4px solid ${item.prioridad === 'P0' ? '#dc2626' : '#f59e0b'}`,
+                borderRadius: '0.375rem',
+                padding: '1rem',
+                fontSize: '0.875rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                  <strong style={{ color: '#1f2937' }}>{item.tema}</strong>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: item.prioridad === 'P0' ? '#dc2626' : '#d97706',
+                    background: item.prioridad === 'P0' ? '#fee2e2' : '#fef3c7',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '0.25rem'
+                  }}>
+                    {item.prioridad}
+                  </span>
+                </div>
+                <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: '0.8125rem' }}>
+                  {item.notas || 'Sin notas'}
+                </p>
+                {item.fechaFin && (
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#9ca3af', fontSize: '0.75rem' }}>
+                    📅 {new Date(item.fechaFin).toLocaleDateString(idioma === 'ES' ? 'es-ES' : 'en-US')}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{
+            background: '#f0fdf4',
+            border: '1px solid #86efac',
+            borderRadius: '0.375rem',
+            padding: '1rem',
+            color: '#166534',
+            textAlign: 'center',
+            fontSize: '0.875rem'
+          }}>
+            {t.sinRiesgos}
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER */}
+      <div style={{
+        marginTop: '2rem',
+        paddingTop: '1rem',
+        borderTop: '1px solid #e5e7eb',
+        fontSize: '0.75rem',
+        color: '#9ca3af',
+        textAlign: 'center'
+      }}>
+        <p style={{ margin: 0 }}>
+          👤 {idioma === 'ES' ? 'Datos de' : 'Data from'} Juan Rodriguez Peisel • {idioma === 'ES' ? 'Actualizado en tiempo real desde Supabase' : 'Real-time updates from Supabase'}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 // ── NuevoTema ─────────────────────────────────────────────────────────────────
@@ -3135,7 +3499,7 @@ export default function OpsBoard() {
     })
   }, [items.length])
 
-  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico','👤 Cristina']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
@@ -3145,6 +3509,7 @@ export default function OpsBoard() {
     '📅 Campañas CVM':   'Campañas CVM',
     '✨ IA Intake':       'IA Intake',
     '⧆ Histórico':       'Histórico',
+    '👤 Cristina':        'Reporte Cristina',
   }
 
   // Nav icon map for sidebar
@@ -3156,6 +3521,7 @@ export default function OpsBoard() {
     '📅 Campañas CVM':   '◷',
     '✨ IA Intake':       '✦',
     '⧆ Histórico':       '⊙',
+    '👤 Cristina':        '◆',
   }
 
   return (
@@ -3318,6 +3684,7 @@ export default function OpsBoard() {
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
               {vista === '📋 Reporte Semanal' && <Reporte items={allItems} proyectos={proyectosConOv} lang={lang} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
+              {vista === '👤 Cristina'        && <Cristina items={allItems} proyectos={proyectos} idioma={lang} />}
             </>
           )}
         </div>
