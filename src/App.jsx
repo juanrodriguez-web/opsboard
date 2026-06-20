@@ -2589,6 +2589,14 @@ ${JSON.stringify(stats,null,2)}` }],
 const Historico = ({ items }) => {
   const [q, setQ] = useState('')
   const [prioF, setPrioF] = useState('')
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const isMobile = w < 768
+
+  useEffect(() => {
+    const h = () => setW(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
 
   const archived = items.filter(i => isArchived(i))
   const filtered = archived.filter(i => {
@@ -2609,16 +2617,16 @@ const Historico = ({ items }) => {
   const inputSt = { background:C.surface, border:`1px solid ${C.border}`, color:C.text, borderRadius:7, padding:'6px 10px', fontSize:12, outline:'none' }
 
   return (
-    <div style={{ padding:'0 24px 32px' }}>
+    <div style={{ padding:isMobile?'0 12px 24px':'0 24px 32px' }}>
       {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+      <div style={{ display:'flex', alignItems:'flex-start', gap:isMobile?8:12, marginBottom:16, flexWrap:'wrap' }}>
         <div>
-          <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:C.text }}>⧆ Histórico</h2>
-          <p style={{ margin:0, fontSize:12, color:C.muted, marginTop:2 }}>Temas completados hace más de 7 días · {archived.length} total</p>
+          <h2 style={{ margin:0, fontSize:isMobile?16:18, fontWeight:700, color:C.text }}>⧆ Histórico</h2>
+          <p style={{ margin:0, fontSize:isMobile?11:12, color:C.muted, marginTop:2 }}>Temas completados hace más de 7 días · {archived.length} total</p>
         </div>
-        <div style={{ marginLeft:'auto', display:'flex', gap:8, flexWrap:'wrap' }}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar…" style={{ ...inputSt, width:180 }} />
-          <select value={prioF} onChange={e=>setPrioF(e.target.value)} style={{ ...inputSt, cursor:'pointer' }}>
+        <div style={{ marginLeft:'auto', display:'flex', gap:isMobile?6:8, flexWrap:'wrap' }}>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar…" style={{ ...inputSt, width:isMobile?'100%':180, fontSize:isMobile?14:12 }} />
+          <select value={prioF} onChange={e=>setPrioF(e.target.value)} style={{ ...inputSt, cursor:'pointer', fontSize:isMobile?14:12 }}>
             <option value="">Todas las prioridades</option>
             {PRIORIDADES.filter(Boolean).map(p=><option key={p} value={p}>{p}</option>)}
           </select>
@@ -2626,35 +2634,35 @@ const Historico = ({ items }) => {
       </div>
 
       {filtered.length === 0 && (
-        <div style={{ textAlign:'center', padding:'60px 0', color:C.muted }}>
-          <div style={{ fontSize:36, marginBottom:12 }}>📭</div>
-          <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Sin items en el histórico</div>
-          <div style={{ fontSize:12 }}>Los temas completados aparecerán aquí tras 7 días en "Completados"</div>
+        <div style={{ textAlign:'center', padding:isMobile?'40px 0':'60px 0', color:C.muted }}>
+          <div style={{ fontSize:isMobile?32:36, marginBottom:10 }}>📭</div>
+          <div style={{ fontSize:isMobile?13:14, fontWeight:600, marginBottom:3 }}>Sin items en el histórico</div>
+          <div style={{ fontSize:isMobile?11:12 }}>Los temas completados aparecerán aquí tras 7 días en "Completados"</div>
         </div>
       )}
 
       {Object.keys(byMonth).sort((a,b) => b.localeCompare(a)).map(key => (
-        <div key={key} style={{ marginBottom:24 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingBottom:6, borderBottom:`1px solid ${C.border}` }}>
+        <div key={key} style={{ marginBottom:isMobile?16:24 }}>
+          <div style={{ fontSize:isMobile?10:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${C.border}` }}>
             {byMonth[key].lbl} · {byMonth[key].items.length} tema{byMonth[key].items.length!==1?'s':''}
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:isMobile?3:4 }}>
             {byMonth[key].items.map(item => {
               const pc = priColor(item.prioridad)
               const oc = ownerColor(item.propietario)
               const doneDate = new Date(getDoneTs(item.id)).toLocaleDateString('es', { day:'numeric', month:'short' })
               return (
-                <div key={item.id} style={{ display:'flex', alignItems:'center', gap:10, background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:'8px 12px', opacity:0.85 }}>
-                  <div style={{ width:16, height:16, borderRadius:'50%', background:'#10b98122', border:'1.5px solid #10b981', display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, color:'#10b981', flexShrink:0 }}>✓</div>
-                  {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:pc.bg, color:pc.color, flexShrink:0 }}>{item.prioridad}</span>}
-                  <span style={{ fontSize:13, color:C.text, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.tema}</span>
-                  {item.proyecto && <span style={{ fontSize:11, color:C.muted, flexShrink:0, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.proyecto}</span>}
+                <div key={item.id} style={{ display:'flex', alignItems:'center', gap:isMobile?6:10, background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:isMobile?'6px 10px':'8px 12px', opacity:0.85 }}>
+                  <div style={{ width:14, height:14, borderRadius:'50%', background:'#10b98122', border:'1.5px solid #10b981', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, color:'#10b981', flexShrink:0 }}>✓</div>
+                  {item.prioridad && <span style={{ fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, background:pc.bg, color:pc.color, flexShrink:0 }}>{item.prioridad}</span>}
+                  <span style={{ fontSize:isMobile?12:13, color:C.text, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.tema}</span>
+                  {!isMobile && item.proyecto && <span style={{ fontSize:11, color:C.muted, flexShrink:0, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.proyecto}</span>}
                   {item.propietario && (
-                    <div style={{ width:20, height:20, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff', flexShrink:0 }} title={item.propietario}>
+                    <div style={{ width:18, height:18, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:'#fff', flexShrink:0 }} title={item.propietario}>
                       {iniciales(item.propietario)}
                     </div>
                   )}
-                  <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>✓ {doneDate}</span>
+                  <span style={{ fontSize:isMobile?9:10, color:C.muted, flexShrink:0 }}>✓ {doneDate}</span>
                 </div>
               )
             })}
