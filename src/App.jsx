@@ -910,6 +910,14 @@ const Dashboard = ({ allItems }) => {
 const CampanasCVM = ({ campanas }) => {
   const [filt,    setFilt]    = useState(() => localStorage.getItem('obs-camp-filt') || 'all')
   const [detalle, setDetalle] = useState(null)
+  const [w, setW]             = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const isMobile = w < 768
+
+  useEffect(() => {
+    const h = () => setW(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
 
   const setF = v => { setFilt(v); localStorage.setItem('obs-camp-filt', v) }
 
@@ -917,18 +925,18 @@ const CampanasCVM = ({ campanas }) => {
   const filtered = campanas.filter(c => filt === 'all' || norm(c.estado) === norm(filt))
 
   if (campanas.length === 0) return (
-    <div style={{ paddingTop:24, maxWidth:600 }}>
-      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:32, textAlign:'center' }}>
-        <div style={{ fontSize:36, marginBottom:12 }}>📅</div>
-        <h3 style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:8 }}>Todavía no hay campañas CVM</h3>
-        <p style={{ fontSize:13, color:C.muted, lineHeight:1.7, marginBottom:20 }}>
+    <div style={{ paddingTop:isMobile?12:24, maxWidth:isMobile?'100%':600 }}>
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:isMobile?20:32, textAlign:'center' }}>
+        <div style={{ fontSize:isMobile?32:36, marginBottom:isMobile?10:12 }}>📅</div>
+        <h3 style={{ fontSize:isMobile?14:15, fontWeight:700, color:C.text, marginBottom:6 }}>Todavía no hay campañas CVM</h3>
+        <p style={{ fontSize:isMobile?12:13, color:C.muted, lineHeight:1.6, marginBottom:16 }}>
           Añade una pestaña al Google Sheet llamada <b style={{ color:C.text }}>Campañas CVM</b> con estas columnas:
         </p>
-        <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:14,
-          fontFamily:'monospace', fontSize:12, color:C.muted, textAlign:'left', lineHeight:2, overflowX:'auto' }}>
+        <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:isMobile?10:14,
+          fontFamily:'monospace', fontSize:isMobile?11:12, color:C.muted, textAlign:'left', lineHeight:1.8, overflowX:'auto' }}>
           Fecha | PYNAME | Tipo | Audiencia | Volumen | Copy | Canal | Estado
         </div>
-        <p style={{ fontSize:11, color:C.muted, marginTop:12, lineHeight:1.7 }}>
+        <p style={{ fontSize:isMobile?10:11, color:C.muted, marginTop:10, lineHeight:1.6 }}>
           <b>Tipo:</b> Oferta One Shot / Reminder / BAU &nbsp;·&nbsp;
           <b>Canal:</b> SMS / Push / Email &nbsp;·&nbsp;
           <b>Estado:</b> Planificado / Enviado / Cancelado
@@ -952,60 +960,60 @@ const CampanasCVM = ({ campanas }) => {
   return (
     <div style={{ paddingTop:16 }}>
       {/* Filter bar */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, flexWrap:'wrap' }}>
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:isMobile?6:8, marginBottom:18, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:isMobile?4:6, flexWrap:'wrap' }}>
           {ESTADOS.map(e => {
             const on  = (e==='all'&&filt==='all') || norm(e)===norm(filt)
             const col = e==='all' ? C.muted : estadoCColor(e)
             const cnt = e==='all' ? campanas.length : campanas.filter(c=>norm(c.estado)===norm(e)).length
             return (
               <button key={e} onClick={() => setF(e)}
-                style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer',
-                  border:`1.5px solid ${on?col:C.border}`, background:on?col+'22':C.card, color:on?col:C.muted }}>
+                style={{ padding:isMobile?'3px 10px':'4px 12px', borderRadius:20, fontSize:isMobile?11:12, fontWeight:600, cursor:'pointer',
+                  border:`1.5px solid ${on?col:C.border}`, background:on?col+'22':C.card, color:on?col:C.muted, whiteSpace:'nowrap' }}>
                 {e==='all'?'Todas':e} <span style={{ opacity:.65 }}>{cnt}</span>
               </button>
             )
           })}
         </div>
-        <div style={{ marginLeft:'auto', display:'flex', gap:16, flexWrap:'wrap' }}>
+        {!isMobile && <div style={{ marginLeft:'auto', display:'flex', gap:16, flexWrap:'wrap' }}>
           <span style={{ fontSize:11, color:C.muted }}><b style={{ color:C.text }}>{campanas.length}</b> campañas</span>
           <span style={{ fontSize:11, color:C.muted }}><b style={{ color:'#34d399' }}>{campanas.filter(c=>norm(c.estado)==='enviado').length}</b> enviadas</span>
           {volTotal > 0 && <span style={{ fontSize:11, color:C.muted }}><b style={{ color:'#06b6d4' }}>{(volTotal/1000).toFixed(0)}k</b> líneas</span>}
-        </div>
+        </div>}
       </div>
 
       {/* Campaign groups */}
       {filtered.length === 0
-        ? <div style={{ textAlign:'center', color:C.muted, padding:40 }}>Sin campañas con este filtro</div>
+        ? <div style={{ textAlign:'center', color:C.muted, padding:isMobile?30:40 }}>Sin campañas con este filtro</div>
         : Object.entries(groups).map(([fecha, list]) => (
-          <div key={fecha} style={{ marginBottom:24 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-              <div style={{ width:10, height:10, borderRadius:'50%', background:'#06b6d4' }} />
-              <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fecha}</span>
-              <span style={{ fontSize:10, color:'#06b6d4', background:'#06b6d422', borderRadius:10, padding:'1px 8px', fontWeight:700 }}>
+          <div key={fecha} style={{ marginBottom:isMobile?16:24 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8, flexWrap:'wrap' }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:'#06b6d4', flexShrink:0 }} />
+              <span style={{ fontSize:isMobile?12:13, fontWeight:700, color:C.text }}>{fecha}</span>
+              <span style={{ fontSize:isMobile?9:10, color:'#06b6d4', background:'#06b6d422', borderRadius:10, padding:isMobile?'1px 6px':'1px 8px', fontWeight:700 }}>
                 {list.length} campaña{list.length!==1?'s':''}
               </span>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:10 }}>
+            <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(auto-fill,minmax(280px,1fr))', gap:isMobile?8:10 }}>
               {list.map(c => {
                 const tc = tipoColor(c.tipo)
                 const ec = estadoCColor(c.estado)
                 return (
                   <div key={c.id} onClick={() => setDetalle(c)}
-                    style={{ background:C.card, border:`1px solid ${C.border}`, borderLeft:`3px solid ${tc}`, borderRadius:8, padding:14, cursor:'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor=tc}
-                    onMouseLeave={e => e.currentTarget.style.borderColor=C.border}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, marginBottom:8 }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:C.text, fontFamily:'monospace', flex:1, lineHeight:1.3 }}>{c.pyname}</span>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:4, background:ec+'22', color:ec, flexShrink:0 }}>{c.estado}</span>
+                    style={{ background:C.card, border:`1px solid ${C.border}`, borderLeft:`3px solid ${tc}`, borderRadius:8, padding:isMobile?10:14, cursor:'pointer' }}
+                    onMouseEnter={!isMobile ? (e => e.currentTarget.style.borderColor=tc) : undefined}
+                    onMouseLeave={!isMobile ? (e => e.currentTarget.style.borderColor=C.border) : undefined}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:6, marginBottom:6 }}>
+                      <span style={{ fontSize:isMobile?11:12, fontWeight:700, color:C.text, fontFamily:'monospace', flex:1, lineHeight:1.3, wordBreak:'break-word' }}>{c.pyname}</span>
+                      <span style={{ fontSize:isMobile?9:10, fontWeight:700, padding:isMobile?'1px 5px':'2px 7px', borderRadius:4, background:ec+'22', color:ec, flexShrink:0 }}>{c.estado}</span>
                     </div>
-                    <div style={{ display:'flex', gap:6, marginBottom:8, flexWrap:'wrap', alignItems:'center' }}>
-                      {c.tipo && <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:4, background:tc+'22', color:tc }}>{c.tipo}</span>}
-                      {c.canal && <span style={{ fontSize:10, color:C.muted, background:C.surface, padding:'2px 6px', borderRadius:4, border:`1px solid ${C.border}` }}>{c.canal}</span>}
-                      {c.volumen && <span style={{ fontSize:10, fontWeight:700, color:'#06b6d4' }}>👥 {c.volumen}</span>}
+                    <div style={{ display:'flex', gap:4, marginBottom:6, flexWrap:'wrap', alignItems:'center' }}>
+                      {c.tipo && <span style={{ fontSize:isMobile?9:10, fontWeight:700, padding:isMobile?'1px 5px':'2px 7px', borderRadius:3, background:tc+'22', color:tc }}>{c.tipo}</span>}
+                      {c.canal && <span style={{ fontSize:isMobile?9:10, color:C.muted, background:C.surface, padding:isMobile?'1px 5px':'2px 6px', borderRadius:3, border:`1px solid ${C.border}` }}>{c.canal}</span>}
+                      {c.volumen && <span style={{ fontSize:isMobile?9:10, fontWeight:700, color:'#06b6d4' }}>👥 {c.volumen}</span>}
                     </div>
-                    {c.audiencia && <p style={{ fontSize:11, color:C.muted, lineHeight:1.4, marginBottom:4, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{c.audiencia}</p>}
-                    {c.copy && <p style={{ fontSize:11, color:C.muted, fontStyle:'italic', lineHeight:1.4, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>"{c.copy.slice(0,90)}{c.copy.length>90?'…':''}"</p>}
+                    {c.audiencia && <p style={{ fontSize:isMobile?10:11, color:C.muted, lineHeight:1.4, marginBottom:3, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{c.audiencia}</p>}
+                    {c.copy && <p style={{ fontSize:isMobile?10:11, color:C.muted, fontStyle:'italic', lineHeight:1.4, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>"{c.copy.slice(0,90)}{c.copy.length>90?'…':''}"</p>}
                   </div>
                 )
               })}
@@ -1016,33 +1024,33 @@ const CampanasCVM = ({ campanas }) => {
 
       {/* Campaign detail modal */}
       {detalle && (
-        <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+        <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:isMobile?12:16 }}
           onClick={e => e.target===e.currentTarget&&setDetalle(null)}>
-          <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:560, maxHeight:'88vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
-            <div style={{ padding:'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:3, height:22, borderRadius:2, background:tipoColor(detalle.tipo), flexShrink:0 }} />
+          <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, width:'100%', maxWidth:isMobile?'100%':560, maxHeight:isMobile?'90vh':'88vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+            <div style={{ padding:isMobile?'10px 14px':'14px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ width:3, height:20, borderRadius:2, background:tipoColor(detalle.tipo), flexShrink:0 }} />
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:11, color:C.muted }}>{detalle.fecha}{detalle.tipo?` · ${detalle.tipo}`:''}</div>
-                <h3 style={{ fontSize:14, fontWeight:700, color:C.text, fontFamily:'monospace' }}>{detalle.pyname}</h3>
+                <div style={{ fontSize:isMobile?10:11, color:C.muted }}>{detalle.fecha}{detalle.tipo?` · ${detalle.tipo}`:''}</div>
+                <h3 style={{ fontSize:isMobile?13:14, fontWeight:700, color:C.text, fontFamily:'monospace', marginTop:2, marginBottom:0 }}>{detalle.pyname}</h3>
               </div>
-              <span style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:5, background:estadoCColor(detalle.estado)+'22', color:estadoCColor(detalle.estado) }}>{detalle.estado}</span>
-              <button onClick={() => setDetalle(null)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18 }}>✕</button>
+              <span style={{ fontSize:isMobile?10:11, fontWeight:700, padding:isMobile?'2px 7px':'3px 9px', borderRadius:4, background:estadoCColor(detalle.estado)+'22', color:estadoCColor(detalle.estado), flexShrink:0 }}>{detalle.estado}</span>
+              <button onClick={() => setDetalle(null)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:18, padding:0 }}>✕</button>
             </div>
-            <div style={{ flex:1, overflowY:'auto', padding:18, display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-              <div><Lbl>Canal</Lbl><span style={{ fontSize:13, color:C.text }}>{detalle.canal||'—'}</span></div>
-              <div><Lbl>Volumen</Lbl><span style={{ fontSize:18, fontWeight:700, color:'#06b6d4' }}>{detalle.volumen||'—'}</span></div>
+            <div style={{ flex:1, overflowY:'auto', padding:isMobile?12:18, display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr', gap:isMobile?10:14 }}>
+              <div><Lbl>Canal</Lbl><span style={{ fontSize:isMobile?12:13, color:C.text }}>{detalle.canal||'—'}</span></div>
+              <div><Lbl>Volumen</Lbl><span style={{ fontSize:isMobile?16:18, fontWeight:700, color:'#06b6d4' }}>{detalle.volumen||'—'}</span></div>
               <div style={{ gridColumn:'1/-1' }}>
                 <Lbl>Audiencia</Lbl>
-                <p style={{ fontSize:13, color:C.text, lineHeight:1.6, background:C.card, borderRadius:6, padding:10 }}>{detalle.audiencia||'—'}</p>
+                <p style={{ fontSize:isMobile?12:13, color:C.text, lineHeight:1.6, background:C.card, borderRadius:6, padding:isMobile?8:10, marginBottom:0 }}>{detalle.audiencia||'—'}</p>
               </div>
               <div style={{ gridColumn:'1/-1' }}>
                 <Lbl>Copy</Lbl>
-                <div style={{ fontSize:12, color:C.muted, lineHeight:1.7, background:C.card, borderRadius:8, padding:12, maxHeight:200, overflowY:'auto', borderLeft:`3px solid #06b6d4`, whiteSpace:'pre-wrap', fontStyle:'italic' }}>
+                <div style={{ fontSize:isMobile?11:12, color:C.muted, lineHeight:1.6, background:C.card, borderRadius:8, padding:isMobile?10:12, maxHeight:200, overflowY:'auto', borderLeft:`3px solid #06b6d4`, whiteSpace:'pre-wrap', fontStyle:'italic' }}>
                   {detalle.copy||'—'}
                 </div>
               </div>
             </div>
-            <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end' }}>
+            <div style={{ padding:isMobile?'8px 14px':'10px 18px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'flex-end' }}>
               <Btn v="sec" onClick={() => setDetalle(null)}>Cerrar</Btn>
             </div>
           </div>
