@@ -3486,6 +3486,70 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
   )
 }
 
+// ── Intake Modal ────────────────────────────────────────────────────────────
+const IntakeModal = ({ onClose, onExecute, onToast }) => {
+  const [processing, setProcessing] = useState(false)
+
+  const handleExecute = async () => {
+    setProcessing(true)
+    try {
+      // Ejecutar comando npm run process-intake
+      // En desarrollo, mostramos instrucciones
+      onToast('📂 Para procesar archivos, ejecuta en terminal: npm run process-intake')
+      onExecute()
+    } catch (e) {
+      onToast('⚠ Error: ' + e.message)
+    } finally {
+      setProcessing(false)
+      onClose()
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target===e.currentTarget && onClose()}>
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, maxWidth:500, width:'100%', overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:20 }}>🔄</span>
+          <h2 style={{ fontSize:16, fontWeight:700, color:C.text, margin:0, flex:1 }}>Procesar Carpeta de Intake</h2>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, cursor:'pointer', color:C.muted }}>✕</button>
+        </div>
+
+        <div style={{ padding:'20px', fontSize:13, lineHeight:1.7 }}>
+          <p style={{ color:C.text, marginBottom:12, fontWeight:600 }}>📂 Ubicación de archivos:</p>
+          <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:12, fontFamily:'monospace', fontSize:11, color:C.muted, marginBottom:16, wordBreak:'break-all', lineHeight:1.5 }}>
+            C:\Users\Juan Rodriguez\OneDrive - Sercom Soluciones S.L\Escritorio\Pendientes Juan - Seguimiento NO borrar
+          </div>
+
+          <p style={{ color:C.text, marginBottom:8, fontWeight:600 }}>📋 Formatos soportados:</p>
+          <div style={{ color:C.muted, marginBottom:16 }}>
+            ✓ .eml (emails exportados)<br/>
+            ✓ .md (notas markdown)<br/>
+            ✓ .txt (texto plano)<br/>
+            (PDF y Excel requieren config adicional)
+          </div>
+
+          <p style={{ color:C.text, marginBottom:8, fontWeight:600 }}>⚙️ Ejecución:</p>
+          <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:12, color:'#166534', fontSize:11, fontFamily:'monospace', marginBottom:16, lineHeight:1.6 }}>
+            npm run process-intake
+          </div>
+
+          <p style={{ color:C.muted, fontSize:12, marginBottom:0 }}>
+            💡 El script leerá la carpeta, analizará cada archivo con Claude y actualizará automáticamente los temas/proyectos correspondientes en OpsBoard.
+          </p>
+        </div>
+
+        <div style={{ padding:'12px 20px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <Btn v="sec" onClick={onClose}>Cerrar</Btn>
+          <Btn onClick={handleExecute} disabled={processing}>
+            {processing ? '⏳ Procesando...' : '▶ Ejecutar ahora'}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function OpsBoard() {
   const [vista,       setVista]      = useState('Dashboard')
   const [lang,        setLang]       = useState('es')
@@ -3502,6 +3566,8 @@ export default function OpsBoard() {
   const [asF,         setAsF]        = useState('all')
   const [modo,        setModo]       = useState('kanban')
   const [toast,       setToast]      = useState(null)
+  const [showIntake,  setShowIntake] = useState(false)
+  const [intakeLog,   setIntakeLog]  = useState(null)
 
   const allItems = items.filter(i => !i._deleted)
   const owners   = [...new Set(allItems.map(i => i.propietario).filter(Boolean))]
@@ -3737,12 +3803,21 @@ export default function OpsBoard() {
             {VIEW_LABELS[vista] || vista}
           </h1>
           {vista === 'Tablero' && (
-            <button onClick={() => setShowNuevo(true)}
-              style={{ padding: isMobile ? '6px 10px' : '7px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize: isMobile ? 11 : 12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms', whiteSpace:'nowrap' }}
-              onMouseEnter={e => e.currentTarget.style.background='#d41c2f'}
-              onMouseLeave={e => e.currentTarget.style.background=C.accent}>
-              {isMobile ? '+ Tema' : '+ Nuevo tema'}
-            </button>
+            <>
+              <button onClick={() => setShowNuevo(true)}
+                style={{ padding: isMobile ? '6px 10px' : '7px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize: isMobile ? 11 : 12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms', whiteSpace:'nowrap' }}
+                onMouseEnter={e => e.currentTarget.style.background='#d41c2f'}
+                onMouseLeave={e => e.currentTarget.style.background=C.accent}>
+                {isMobile ? '+ Tema' : '+ Nuevo tema'}
+              </button>
+              <button onClick={() => setShowIntake(true)}
+                title="Procesar carpeta de intake"
+                style={{ padding: isMobile ? '6px 10px' : '7px 14px', background:'#10b981', color:'#fff', border:'none', borderRadius:8, fontSize: isMobile ? 11 : 12, fontWeight:600, cursor:'pointer', letterSpacing:'-.01em', transition:'background 120ms', whiteSpace:'nowrap' }}
+                onMouseEnter={e => e.currentTarget.style.background='#059669'}
+                onMouseLeave={e => e.currentTarget.style.background='#10b981'}>
+                {isMobile ? '🔄' : '🔄 Procesar'}
+              </button>
+            </>
           )}
           {(items.length === 0 || proyectos.length === 0) && !loading && (
             <button onClick={async () => {
@@ -3840,6 +3915,15 @@ export default function OpsBoard() {
             else setItemActivo(null)
           }}
           proyectoNames={proyectos.map(p => p.nombre)}
+          onToast={msg => setToast(msg)} />
+      )}
+      {showIntake && (
+        <IntakeModal
+          onClose={() => setShowIntake(false)}
+          onExecute={() => {
+            setToast('⏳ Procesando carpeta de intake...')
+            setShowIntake(false)
+          }}
           onToast={msg => setToast(msg)} />
       )}
       {toast && <Toast msg={toast} onHide={() => setToast(null)} />}
