@@ -201,6 +201,11 @@ async function sbUpdateProyecto(id, fields) {
   if (error) throw new Error(error.message)
 }
 
+async function sbDeleteItem(id) {
+  const { error } = await supabase.from('items').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 // Hitos
 async function fetchHitos(proyectoId) {
   const { data, error } = await supabase.from('hitos').select('*').eq('proyecto_id', proyectoId).order('orden', { ascending: true })
@@ -4289,7 +4294,7 @@ export default function OpsBoard() {
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
-              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={id => supabase.from('items').delete().eq('id', id)} />}
+              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={async (id) => { await sbDeleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
           )}
