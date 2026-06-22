@@ -3097,75 +3097,144 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
         </p>
       </div>
 
-      {/* GRID PRINCIPAL - Mobile: 1 col, Tablet: 2 col, Desktop: 3 col */}
+      {/* KPI STRIP COMPACTO - Horizontal */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '0.5rem',
+        padding: isMobile ? '1rem' : '1.25rem',
+        marginBottom: isMobile ? '1rem' : '1.5rem',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: isMobile ? '1.5rem' : '3rem',
+        alignItems: 'center'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+          <span style={{ fontSize: isMobile ? '0.75rem' : '0.875rem', color: '#6b7280', fontWeight: '500' }}>{t.onTrack}:</span>
+          <span style={{ fontSize: isMobile ? '1.5rem' : '2.25rem', fontWeight: '700', color: '#3b82f6' }}>{onTrack}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+          <span style={{ fontSize: isMobile ? '0.75rem' : '0.875rem', color: '#6b7280', fontWeight: '500' }}>{t.enPeligro}:</span>
+          <span style={{ fontSize: isMobile ? '1.5rem' : '2.25rem', fontWeight: '700', color: enPeligro > 0 ? '#ef4444' : '#10b981' }}>{enPeligro}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+          <span style={{ fontSize: isMobile ? '0.75rem' : '0.875rem', color: '#6b7280', fontWeight: '500' }}>{t.completados}:</span>
+          <span style={{ fontSize: isMobile ? '1.5rem' : '2.25rem', fontWeight: '700', color: '#10b981' }}>{completados}</span>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'baseline', gap: '0.5rem', paddingLeft: isMobile ? 0 : '1rem', borderLeft: isMobile ? 'none' : '1px solid #e5e7eb' }}>
+          <span style={{ fontSize: isMobile ? '0.75rem' : '0.875rem', color: '#6b7280', fontWeight: '600' }}>Total:</span>
+          <span style={{ fontSize: isMobile ? '1.25rem' : '1.875rem', fontWeight: '700', color: '#1f2937' }}>{total}</span>
+        </div>
+      </div>
+
+      {/* GRID 2+1 - Resúmenes + Riesgos */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : window.innerWidth < 1024 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-        gap: isMobile ? '1rem' : '1.5rem',
-        marginBottom: isMobile ? '1.5rem' : '2rem'
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+        gap: isMobile ? '0.75rem' : '1rem',
+        marginBottom: isMobile ? '1rem' : '1.5rem'
       }}>
 
-        {/* CARD 1: STATUS RÁPIDO */}
+        {/* CARD 1: ESTA SEMANA */}
         <div style={{
           background: 'white',
           border: '1px solid #e5e7eb',
           borderRadius: '0.5rem',
-          padding: isMobile ? '1rem' : '1.5rem',
+          padding: isMobile ? '0.75rem' : '1rem',
           boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
         }}>
-          <h2 style={{
-            fontSize: isMobile ? '0.75rem' : '0.875rem',
+          <h3 style={{
+            fontSize: isMobile ? '0.7rem' : '0.8rem',
             fontWeight: '600',
             color: '#6b7280',
             textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            margin: '0 0 0.75rem 0'
+            letterSpacing: '0.04em',
+            margin: '0 0 0.5rem 0'
           }}>
-            {t.statusRapido}
-          </h2>
-          <div style={{ display: 'flex', gap: isMobile ? '0.75rem' : '1rem', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#6b7280', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>{t.onTrack}</span>
-              <span style={{
-                fontSize: isMobile ? '1.5rem' : '1.875rem',
-                fontWeight: '700',
-                color: '#3b82f6'
-              }}>
-                {onTrack}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#6b7280', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>{t.enPeligro}</span>
-              <span style={{
-                fontSize: isMobile ? '1.5rem' : '1.875rem',
-                fontWeight: '700',
-                color: enPeligro > 0 ? '#ef4444' : '#10b981'
-              }}>
-                {enPeligro}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#6b7280', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>{t.completados}</span>
-              <span style={{
-                fontSize: isMobile ? '1.5rem' : '1.875rem',
-                fontWeight: '700',
-                color: '#10b981'
-              }}>
-                {completados}
-              </span>
-            </div>
-            <div style={{
-              marginTop: isMobile ? '0.5rem' : '0.75rem',
-              paddingTop: isMobile ? '0.5rem' : '0.75rem',
-              borderTop: '1px solid #e5e7eb',
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: isMobile ? '0.75rem' : '0.875rem'
-            }}>
-              <span style={{ fontWeight: '600', color: '#000' }}>Total</span>
-              <span style={{ fontWeight: '600', color: '#000' }}>{total}</span>
-            </div>
-          </div>
+            {t.estaSemana}
+          </h3>
+          {cerradosEstaSemana.length > 0 ? (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {cerradosEstaSemana.slice(0, 3).map(item => (
+                <li key={item.id} style={{
+                  fontSize: isMobile ? '0.7rem' : '0.8rem',
+                  padding: '0.25rem 0',
+                  color: '#374151',
+                  display: 'flex',
+                  gap: '0.375rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  <span style={{ color: '#10b981', flexShrink: 0, fontSize: '0.875rem' }}>✓</span>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.tema}</span>
+                </li>
+              ))}
+              {cerradosEstaSemana.length > 3 && (
+                <li style={{
+                  fontSize: '0.65rem',
+                  color: '#9ca3af',
+                  marginTop: '0.25rem',
+                  paddingTop: '0.25rem'
+                }}>
+                  +{cerradosEstaSemana.length - 3} más
+                </li>
+              )}
+            </ul>
+          ) : (
+            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.7rem' : '0.8rem', margin: 0 }}>
+              {t.noData}
+            </p>
+          )}
+        </div>
+
+        {/* CARD 2: PRÓXIMA SEMANA */}
+        <div style={{
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          padding: isMobile ? '0.75rem' : '1rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+        }}>
+          <h3 style={{
+            fontSize: isMobile ? '0.7rem' : '0.8rem',
+            fontWeight: '600',
+            color: '#6b7280',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            margin: '0 0 0.5rem 0'
+          }}>
+            {t.proximaSemana}
+          </h3>
+          {proximosSieteDias.length > 0 ? (
+            <ol style={{ margin: 0, padding: isMobile ? '0 0 0 1rem' : '0 0 0 1.25rem', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
+              {proximosSieteDias.slice(0, 3).map((item, idx) => (
+                <li key={item.id} style={{
+                  padding: '0.25rem 0',
+                  color: '#374151',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{item.tema}</span>
+                </li>
+              ))}
+              {proximosSieteDias.length > 3 && (
+                <li style={{
+                  fontSize: '0.65rem',
+                  color: '#9ca3af',
+                  marginTop: '0.25rem'
+                }}>
+                  +{proximosSieteDias.length - 3} más
+                </li>
+              )}
+            </ol>
+          ) : (
+            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.7rem' : '0.8rem', margin: 0 }}>
+              {t.noData}
+            </p>
+          )}
         </div>
 
         {/* CARD 2: ESTA SEMANA */}
@@ -3222,31 +3291,84 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
           )}
         </div>
 
-        {/* CARD 3: PRÓXIMA SEMANA */}
-        <div style={{
-          background: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '0.5rem',
-          padding: isMobile ? '1rem' : '1.5rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-        }}>
-          <h2 style={{
-            fontSize: isMobile ? '0.75rem' : '0.875rem',
-            fontWeight: '600',
-            color: '#6b7280',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            margin: '0 0 0.75rem 0'
-          }}>
-            {t.proximaSemana}
-          </h2>
-          {proximosSieteDias.length > 0 ? (
-            <ol style={{ margin: 0, padding: isMobile ? '0 0 0 1rem' : '0 0 0 1.5rem', fontSize: isMobile ? '0.75rem' : '0.875rem' }}>
-              {proximosSieteDias.slice(0, isMobile ? 2 : 3).map((item, idx) => (
-                <li key={item.id} style={{
-                  padding: '0.5rem 0',
-                  color: '#374151',
-                  overflow: 'hidden',
+      </div>
+
+      {/* RIESGOS / BLOCKERS - Grid 3 columnas compacto */}
+      {(() => {
+        if (riesgos.length === 0) return null
+        return (
+          <div>
+            <h2 style={{
+              fontSize: isMobile ? '0.8rem' : '0.875rem',
+              fontWeight: '700',
+              color: '#1f2937',
+              margin: '0 0 0.75rem 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              <span style={{ fontSize: '1.25rem' }}>⚠️</span> {t.riesgos}
+            </h2>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: isMobile ? '0.75rem' : '1rem'
+            }}>
+              {riesgos.map(item => {
+                const isBlocked = item.status === 'blocked'
+                return (
+                  <div key={item.id} style={{
+                    background: isBlocked ? '#fef2f2' : '#fffbeb',
+                    border: `1px solid ${isBlocked ? '#fecaca' : '#fde68a'}`,
+                    borderLeft: `4px solid ${item.prioridad === 'P0' ? '#dc2626' : '#f59e0b'}`,
+                    borderRadius: '0.375rem',
+                    padding: isMobile ? '0.75rem' : '0.875rem',
+                    fontSize: isMobile ? '0.7rem' : '0.8rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                      <strong style={{ color: '#1f2937', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {item.tema}
+                      </strong>
+                      <span style={{
+                        fontSize: isMobile ? '0.6rem' : '0.7rem',
+                        fontWeight: '700',
+                        color: item.prioridad === 'P0' ? '#dc2626' : '#d97706',
+                        background: item.prioridad === 'P0' ? '#fee2e2' : '#fef3c7',
+                        padding: '0.125rem 0.375rem',
+                        borderRadius: '0.25rem',
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {item.prioridad}
+                      </span>
+                    </div>
+                    {item.notas && (
+                      <p style={{
+                        margin: '0.25rem 0 0 0',
+                        color: '#6b7280',
+                        fontSize: isMobile ? '0.65rem' : '0.75rem',
+                        lineHeight: '1.3',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical'
+                      }}>
+                        {item.notas}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+// ── Otros componentes ────────────────────────────────────────────────
                   textOverflow: 'ellipsis'
                 }}>
                   <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.tema}</strong>
