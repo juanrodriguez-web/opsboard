@@ -3787,20 +3787,85 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
 // ── Intake Modal ────────────────────────────────────────────────────────────
 const IntakeModal = ({ onClose, onExecute, onToast }) => {
   const [processing, setProcessing] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
 
   const handleExecute = async () => {
     setProcessing(true)
+    setError(null)
+    setResult(null)
     try {
-      // Ejecutar comando npm run process-intake
-      // En desarrollo, mostramos instrucciones
-      onToast('📂 Para procesar archivos, ejecuta en terminal: npm run process-intake')
-      onExecute()
+      const response = await fetch('/api/process-intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Error en procesamiento')
+      setResult(data.stats)
+      onToast('✅ Procesamiento completado exitosamente')
     } catch (e) {
-      onToast('⚠ Error: ' + e.message)
+      setError(e.message)
+      onToast('❌ Error: ' + e.message)
     } finally {
       setProcessing(false)
-      onClose()
     }
+  }
+
+  if (result) {
+    return (
+      <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+        onClick={e => e.target===e.currentTarget && onClose()}>
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, maxWidth:500, width:'100%', overflow:'hidden', maxHeight:'90vh', overflowY:'auto' }}>
+          <div style={{ padding:'16px 20px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:20 }}>✅</span>
+            <h2 style={{ fontSize:16, fontWeight:700, color:'#10b981', margin:0, flex:1 }}>Procesamiento Completado</h2>
+            <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, cursor:'pointer', color:C.muted }}>✕</button>
+          </div>
+
+          <div style={{ padding:'20px', fontSize:13, lineHeight:1.8 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:20 }}>
+              <div style={{ background:C.surface, borderRadius:8, padding:12, textAlign:'center' }}>
+                <div style={{ fontSize:20, fontWeight:700, color:'#10b981', marginBottom:4 }}>{result.archivosEncontrados}</div>
+                <div style={{ fontSize:11, color:C.muted }}>Archivos encontrados</div>
+              </div>
+              <div style={{ background:C.surface, borderRadius:8, padding:12, textAlign:'center' }}>
+                <div style={{ fontSize:20, fontWeight:700, color:'#3b82f6', marginBottom:4 }}>{result.itemsActualizados}</div>
+                <div style={{ fontSize:11, color:C.muted }}>Items actualizados</div>
+              </div>
+              <div style={{ background:C.surface, borderRadius:8, padding:12, textAlign:'center' }}>
+                <div style={{ fontSize:20, fontWeight:700, color:'#8b5cf6', marginBottom:4 }}>{result.archivosProcessados}</div>
+                <div style={{ fontSize:11, color:C.muted }}>Archivos procesados</div>
+              </div>
+              <div style={{ background:C.surface, borderRadius:8, padding:12, textAlign:'center' }}>
+                <div style={{ fontSize:20, fontWeight:700, color:'#d97706', marginBottom:4 }}>{Math.round(result.duracion / 1000)}s</div>
+                <div style={{ fontSize:11, color:C.muted }}>Duración</div>
+              </div>
+            </div>
+
+            {result.detalles && result.detalles.length > 0 && (
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8 }}>📋 Detalles:</div>
+                <div style={{ background:C.surface, borderRadius:8, padding:12, maxHeight:200, overflowY:'auto' }}>
+                  {result.detalles.map((d, i) => (
+                    <div key={i} style={{ fontSize:11, color:C.text, paddingBottom:6, borderBottom: i < result.detalles.length - 1 ? `1px solid ${C.border}44` : 'none', paddingTop: i > 0 ? 6 : 0 }}>
+                      ✅ {d.nombre}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p style={{ color:C.muted, fontSize:11, marginTop:16, marginBottom:0 }}>
+              ⏰ {new Date(result.timestamp).toLocaleTimeString('es-ES')}
+            </p>
+          </div>
+
+          <div style={{ padding:'12px 20px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <Btn onClick={onClose}>Cerrar</Btn>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -3812,6 +3877,12 @@ const IntakeModal = ({ onClose, onExecute, onToast }) => {
           <h2 style={{ fontSize:16, fontWeight:700, color:C.text, margin:0, flex:1 }}>Procesar Carpeta de Intake</h2>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, cursor:'pointer', color:C.muted }}>✕</button>
         </div>
+
+        {error && (
+          <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', color:'#991b1b', padding:12, margin:16, borderRadius:8, fontSize:12 }}>
+            ❌ {error}
+          </div>
+        )}
 
         <div style={{ padding:'20px', fontSize:13, lineHeight:1.7 }}>
           <p style={{ color:C.text, marginBottom:12, fontWeight:600 }}>📂 Ubicación de archivos:</p>
@@ -3827,14 +3898,13 @@ const IntakeModal = ({ onClose, onExecute, onToast }) => {
             (PDF y Excel requieren config adicional)
           </div>
 
-          <p style={{ color:C.text, marginBottom:8, fontWeight:600 }}>⚙️ Ejecución:</p>
-          <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:12, color:'#166534', fontSize:11, fontFamily:'monospace', marginBottom:16, lineHeight:1.6 }}>
-            npm run process-intake
+          <p style={{ color:C.text, marginBottom:0, fontWeight:600 }}>💡 Al hacer clic en "Ejecutar ahora":</p>
+          <div style={{ color:C.muted, fontSize:12, marginTop:8 }}>
+            • Se procesarán todos los archivos de la carpeta<br/>
+            • Claude analizará cada archivo<br/>
+            • Se actualizarán automáticamente los temas/proyectos<br/>
+            • Recibirás un resumen detallado aquí
           </div>
-
-          <p style={{ color:C.muted, fontSize:12, marginBottom:0 }}>
-            💡 El script leerá la carpeta, analizará cada archivo con Claude y actualizará automáticamente los temas/proyectos correspondientes en OpsBoard.
-          </p>
         </div>
 
         <div style={{ padding:'12px 20px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8, justifyContent:'flex-end' }}>
