@@ -197,35 +197,26 @@ ${proyList}
 2. Si no encuentra código BPMOC, identifica qué tema(s) o proyecto(s) se relacionan por nombre
 3. Si hay múltiples posibilidades, lista las más probables
 4. Extrae cambios, estados nuevos, comentarios relevantes, fechas
-5. Responde ÚNICAMENTE con un JSON válido, sin markdown:
+5. Responde ÚNICAMENTE con un JSON válido, sin markdown.
 
-IMPORTANTE: Los códigos BPMOC son únicos e inmutables. Si encuentras BPMOC214 en el documento, busca exactamente "BPMOC214" en los temas disponibles.
+IMPORTANTE:
+- Los códigos BPMOC son únicos e inmutables
+- En JSON, escapa comillas dobles con backslash: \"
+- Usa \\n para saltos de línea, NO saltos reales
+- Máximo 200 caracteres por comentario
+- Retorna SOLO el JSON, nada más
 
+Estructura:
 {
   "matches": [
-    {
-      "type": "item|proyecto",
-      "id": "UUID o null",
-      "name": "nombre identificado",
-      "confidence": 0.9,
-      "reason": "por qué crees que coincide"
-    }
+    {"type": "item|proyecto", "id": "uuid o null", "name": "nombre", "confidence": 0.9, "reason": "por qué"}
   ],
   "updates": [
-    {
-      "matchId": "id del match",
-      "field": "status|comentario|fecha_fin",
-      "value": "nuevo valor",
-      "reason": "por qué hacer este cambio"
-    }
+    {"matchId": "id", "field": "status|comentario|fecha_fin", "value": "valor", "reason": "por qué"}
   ],
-  "needsConfirmation": true|false,
-  "extractedComment": "resumen del contenido relevante para comentario"
-}
-
-Sé conciso en los comentarios. Máximo 200 caracteres.
-
-IMPORTANTE: Retorna SOLO el JSON, nada más. Sin explicaciones, sin markdown.`
+  "needsConfirmation": false,
+  "extractedComment": "resumen máx 200 chars"
+}`
 
   try {
     const message = await client.messages.create({
