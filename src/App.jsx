@@ -3369,84 +3369,8 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
 }
 
 // ── Otros componentes ────────────────────────────────────────────────
-        padding: isMobile ? '1rem' : '1.5rem',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-      }}>
-        <h2 style={{
-          fontSize: isMobile ? '0.75rem' : '0.875rem',
-          fontWeight: '600',
-          color: '#6b7280',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          margin: '0 0 0.75rem 0'
-        }}>
-          ⚠️  {t.riesgos}
-        </h2>
-        {riesgos.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: isMobile ? '0.75rem' : '1rem' }}>
-            {riesgos.slice(0, isMobile ? 3 : undefined).map(item => (
-              <div key={item.id} style={{
-                background: item.status === 'blocked' ? '#fef2f2' : '#fffbeb',
-                border: `1px solid ${item.status === 'blocked' ? '#fecaca' : '#fde68a'}`,
-                borderLeft: `4px solid ${item.prioridad === 'P0' ? '#dc2626' : '#f59e0b'}`,
-                borderRadius: '0.375rem',
-                padding: isMobile ? '0.75rem' : '1rem',
-                fontSize: isMobile ? '0.75rem' : '0.875rem'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '0.5rem' }}>
-                  <strong style={{ color: '#1f2937', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-word' }}>{item.tema}</strong>
-                  <span style={{
-                    fontSize: isMobile ? '0.65rem' : '0.75rem',
-                    fontWeight: '600',
-                    color: item.prioridad === 'P0' ? '#dc2626' : '#d97706',
-                    background: item.prioridad === 'P0' ? '#fee2e2' : '#fef3c7',
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '0.25rem',
-                    flexShrink: 0,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {item.prioridad}
-                  </span>
-                </div>
-                {item.notas && (
-                  <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: isMobile ? '0.7rem' : '0.8125rem', lineHeight: '1.4', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                    {item.notas}
-                  </p>
-                )}
-                {item.fechaFin && (
-                  <p style={{ margin: '0.5rem 0 0 0', color: '#9ca3af', fontSize: isMobile ? '0.65rem' : '0.75rem' }}>
-                    📅 {new Date(item.fechaFin).toLocaleDateString(idioma === 'ES' ? 'es-ES' : 'en-US')}
-                  </p>
-                )}
-              </div>
-            ))}
-            {isMobile && riesgos.length > 3 && (
-              <div style={{ padding: '0.75rem', color: '#6b7280', fontSize: '0.75rem', textAlign: 'center', borderTop: '1px solid #e5e7eb' }}>
-                +{riesgos.length - 3} riesgos más
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{
-            background: '#f0fdf4',
-            border: '1px solid #86efac',
-            borderRadius: '0.375rem',
-            padding: isMobile ? '0.75rem' : '1rem',
-            color: '#166534',
-            textAlign: 'center',
-            fontSize: isMobile ? '0.75rem' : '0.875rem'
-          }}>
-            {t.sinRiesgos}
-          </div>
-        )}
-      </div>
 
-      {/* FOOTER */}
-      <div style={{
-        marginTop: isMobile ? '1.5rem' : '2rem',
-        paddingTop: isMobile ? '0.75rem' : '1rem',
-        borderTop: '1px solid #e5e7eb',
-        fontSize: isMobile ? '0.65rem' : '0.75rem',
+const DummyComponent = () => null
         color: '#9ca3af',
         textAlign: 'center',
         overflow: 'hidden'
