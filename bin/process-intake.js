@@ -264,14 +264,39 @@ Estructura:
 
     const jsonStr = text.substring(firstBrace, lastBrace + 1)
 
-    // Intentar parsear
+    // Intentar parsear - con intentos de reparación
     let result
     try {
       result = JSON.parse(jsonStr)
     } catch (parseError) {
-      log(`Error parseando JSON: ${parseError.message}`, 'error')
-      log(`JSON recibido: ${jsonStr.substring(0, 300)}...`, 'error')
-      return null
+      // Intento 1: Limpiar comillas sin escapar dentro de strings
+      let repairedJson = jsonStr
+        .replace(/: "([^"]*)$/gm, ': "$1"') // Cerrar strings sin cerrar
+        .replace(/([^\\])"([^\\])"([^:])/g, '$1\\"$2\\"$3') // Escapar comillas internas
+
+      try {
+        result = JSON.parse(repairedJson)
+      } catch (retryError) {
+        // Intento 2: Extraer solo los matches sin updates si fallan
+        const matchesMatch = jsonStr.match(/"matches":\s*\[([\s\S]*?)\],/)
+        if (matchesMatch) {
+          try {
+            result = {
+              matches: JSON.parse('[' + matchesMatch[1] + ']'),
+              updates: [],
+              needsConfirmation: false,
+              extractedComment: 'Análisis parcial (JSON malformado)'
+            }
+          } catch (e) {
+            log(`Error parseando JSON incluso con reparación: ${parseError.message}`, 'error')
+            return null
+          }
+        } else {
+          log(`Error parseando JSON: ${parseError.message}`, 'error')
+          log(`JSON recibido: ${jsonStr.substring(0, 300)}...`, 'error')
+          return null
+        }
+      }
     }
 
     return result
