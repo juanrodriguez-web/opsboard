@@ -3369,29 +3369,6 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
 }
 
 // ── Otros componentes ────────────────────────────────────────────────
-                  textOverflow: 'ellipsis'
-                }}>
-                  <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.tema}</strong>
-                  <span style={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: '#6b7280' }}>
-                    🎯 {item.prioridad || '—'}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.75rem' : '0.875rem', margin: 0 }}>
-              {t.noData}
-            </p>
-          )}
-        </div>
-
-      </div>
-
-      {/* SECCIÓN RIESGOS (ANCHO COMPLETO) */}
-      <div style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '0.5rem',
         padding: isMobile ? '1rem' : '1.5rem',
         boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
       }}>
