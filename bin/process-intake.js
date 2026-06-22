@@ -182,7 +182,7 @@ De: ${fileContent.from || 'N/A'}
 Fecha: ${fileContent.date || 'N/A'}
 
 Contenido:
-${fileContent.body.slice(0, 2000)}
+${fileContent.body.slice(0, 10000)}
 
 ## ELEMENTOS EXISTENTES EN OPSBOARD
 
