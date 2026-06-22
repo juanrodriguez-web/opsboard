@@ -2980,7 +2980,7 @@ const Historico = ({ items }) => {
 }
 
 // ── Cristina (Reporte Ejecutivo) ───────────────────────────────────────────────
-const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
+const Cristina = ({ items = [], proyectos = [], idioma = 'ES', onDeleteItem = () => {} }) => {
   // Usar TODOS los items (sin filtro de propietario)
   const juanItems = items;
 
@@ -3136,13 +3136,15 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
         marginBottom: isMobile ? '1rem' : '1.5rem'
       }}>
 
-        {/* CARD 1: ESTA SEMANA */}
+        {/* CARD 1: PRÓXIMA SEMANA - TABLA SCROLLEABLE */}
         <div style={{
           background: 'white',
           border: '1px solid #e5e7eb',
           borderRadius: '0.5rem',
           padding: isMobile ? '0.75rem' : '1rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+          display: 'flex',
+          flexDirection: 'column'
         }}>
           <h3 style={{
             fontSize: isMobile ? '0.7rem' : '0.8rem',
@@ -3152,36 +3154,36 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
             letterSpacing: '0.04em',
             margin: '0 0 0.5rem 0'
           }}>
-            {t.estaSemana}
+            {t.proximaSemana}
           </h3>
-          {cerradosEstaSemana.length > 0 ? (
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              {cerradosEstaSemana.slice(0, 3).map(item => (
-                <li key={item.id} style={{
-                  fontSize: isMobile ? '0.7rem' : '0.8rem',
-                  padding: '0.25rem 0',
-                  color: '#374151',
-                  display: 'flex',
-                  gap: '0.375rem',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  <span style={{ color: '#10b981', flexShrink: 0, fontSize: '0.875rem' }}>✓</span>
-                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.tema}</span>
-                </li>
-              ))}
-              {cerradosEstaSemana.length > 3 && (
-                <li style={{
-                  fontSize: '0.65rem',
-                  color: '#9ca3af',
-                  marginTop: '0.25rem',
-                  paddingTop: '0.25rem'
-                }}>
-                  +{cerradosEstaSemana.length - 3} más
-                </li>
-              )}
-            </ul>
+          {proximosSieteDias.length > 0 ? (
+            <div style={{
+              maxHeight: '200px',
+              overflowY: 'auto',
+              flex: 1,
+              border: `1px solid #e5e7eb`,
+              borderRadius: '0.375rem',
+              fontSize: isMobile ? '0.7rem' : '0.8rem'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', margin: 0 }}>
+                <tbody>
+                  {proximosSieteDias.map((item, idx) => (
+                    <tr key={item.id} style={{ borderBottom: `1px solid #e5e7eb` }}>
+                      <td style={{ padding: '0.375rem', color: '#9ca3af', fontWeight: '600', width: '20px' }}>{idx + 1}.</td>
+                      <td style={{ padding: '0.375rem', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.tema}
+                      </td>
+                      <td style={{ padding: '0.375rem', textAlign: 'right', width: '20px' }}>
+                        <button onClick={() => onDeleteItem(item.id)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '700', padding: 0 }}>
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.7rem' : '0.8rem', margin: 0 }}>
               {t.noData}
@@ -3237,55 +3239,56 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
           )}
         </div>
 
-        {/* CARD 2: ESTA SEMANA */}
+        {/* CARD 2: ESTA SEMANA - TABLA SCROLLEABLE */}
         <div style={{
           background: 'white',
           border: '1px solid #e5e7eb',
           borderRadius: '0.5rem',
-          padding: isMobile ? '1rem' : '1.5rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+          padding: isMobile ? '0.75rem' : '1rem',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+          display: 'flex',
+          flexDirection: 'column'
         }}>
-          <h2 style={{
-            fontSize: isMobile ? '0.75rem' : '0.875rem',
+          <h3 style={{
+            fontSize: isMobile ? '0.7rem' : '0.8rem',
             fontWeight: '600',
             color: '#6b7280',
             textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            margin: '0 0 0.75rem 0'
+            letterSpacing: '0.04em',
+            margin: '0 0 0.5rem 0'
           }}>
             {t.estaSemana}
-          </h2>
+          </h3>
           {cerradosEstaSemana.length > 0 ? (
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              {cerradosEstaSemana.slice(0, isMobile ? 2 : 3).map(item => (
-                <li key={item.id} style={{
-                  fontSize: isMobile ? '0.75rem' : '0.875rem',
-                  padding: '0.5rem 0',
-                  color: '#374151',
-                  display: 'flex',
-                  gap: '0.5rem',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  <span style={{ color: '#10b981', flexShrink: 0 }}>✓</span>
-                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.tema}</span>
-                </li>
-              ))}
-              {cerradosEstaSemana.length > (isMobile ? 2 : 3) && (
-                <li style={{
-                  fontSize: '0.65rem',
-                  color: '#9ca3af',
-                  borderTop: '1px solid #e5e7eb',
-                  marginTop: '0.5rem',
-                  paddingTop: '0.5rem'
-                }}>
-                  +{cerradosEstaSemana.length - (isMobile ? 2 : 3)} más
-                </li>
-              )}
-            </ul>
+            <div style={{
+              maxHeight: '200px',
+              overflowY: 'auto',
+              flex: 1,
+              border: `1px solid #e5e7eb`,
+              borderRadius: '0.375rem',
+              fontSize: isMobile ? '0.7rem' : '0.8rem'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', margin: 0 }}>
+                <tbody>
+                  {cerradosEstaSemana.map(item => (
+                    <tr key={item.id} style={{ borderBottom: `1px solid #e5e7eb` }}>
+                      <td style={{ padding: '0.375rem', color: '#10b981', fontWeight: '600', width: '16px' }}>✓</td>
+                      <td style={{ padding: '0.375rem', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.tema}
+                      </td>
+                      <td style={{ padding: '0.375rem', textAlign: 'right', width: '20px' }}>
+                        <button onClick={() => onDeleteItem(item.id)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '700', padding: 0 }}>
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.75rem' : '0.875rem', margin: 0 }}>
+            <p style={{ color: '#9ca3af', fontSize: isMobile ? '0.7rem' : '0.8rem', margin: 0 }}>
               {t.noData}
             </p>
           )}
@@ -3329,18 +3332,23 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
                       <strong style={{ color: '#1f2937', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                         {item.tema}
                       </strong>
-                      <span style={{
-                        fontSize: isMobile ? '0.6rem' : '0.7rem',
-                        fontWeight: '700',
-                        color: item.prioridad === 'P0' ? '#dc2626' : '#d97706',
-                        background: item.prioridad === 'P0' ? '#fee2e2' : '#fef3c7',
-                        padding: '0.125rem 0.375rem',
-                        borderRadius: '0.25rem',
-                        flexShrink: 0,
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {item.prioridad}
-                      </span>
+                      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'start', flexShrink: 0 }}>
+                        <span style={{
+                          fontSize: isMobile ? '0.6rem' : '0.7rem',
+                          fontWeight: '700',
+                          color: item.prioridad === 'P0' ? '#dc2626' : '#d97706',
+                          background: item.prioridad === 'P0' ? '#fee2e2' : '#fef3c7',
+                          padding: '0.125rem 0.375rem',
+                          borderRadius: '0.25rem',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {item.prioridad}
+                        </span>
+                        <button onClick={() => onDeleteItem(item.id)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '700', padding: 0, lineHeight: 1 }}>
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     {item.notas && (
                       <p style={{
@@ -4281,7 +4289,7 @@ export default function OpsBoard() {
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
-              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} />}
+              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={id => supabase.from('items').delete().eq('id', id)} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
           )}
