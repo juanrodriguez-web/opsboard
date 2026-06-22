@@ -94,9 +94,34 @@ const ensureFolders = () => {
 // LECTURA DE ARCHIVOS
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Limpiar caracteres malformados del encoding
+const cleanContent = (text) => {
+  return text
+    .replace(/Ã¡/g, 'á')
+    .replace(/Ã©/g, 'é')
+    .replace(/Ã­/g, 'í')
+    .replace(/Ã³/g, 'ó')
+    .replace(/Ã¹/g, 'ú')
+    .replace(/Ã±/g, 'ñ')
+    .replace(/Ã /g, 'à')
+    .replace(/Ã¨/g, 'è')
+    .replace(/Ã¬/g, 'ì')
+    .replace(/Ã²/g, 'ò')
+    .replace(/Ã¼/g, 'ü')
+    .replace(/Ã/g, 'Á')
+    .replace(/É/g, 'É')
+    .replace(/Í/g, 'Í')
+    .replace(/Ó/g, 'Ó')
+    .replace(/Ú/g, 'Ú')
+    .replace(/Ñ/g, 'Ñ')
+}
+
 const readFile = (filePath) => {
   const ext = path.extname(filePath).toLowerCase()
-  const content = fs.readFileSync(filePath, 'utf8')
+  let content = fs.readFileSync(filePath, 'utf8')
+
+  // Limpiar caracteres rotos
+  content = cleanContent(content)
 
   if (ext === '.eml') {
     // Parsear email simple
