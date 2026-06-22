@@ -2981,10 +2981,8 @@ const Historico = ({ items }) => {
 
 // ── Cristina (Reporte Ejecutivo) ───────────────────────────────────────────────
 const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
-  // Filtrar solo items de Juangas
-  const juanItems = items.filter(i =>
-    i.propietario?.includes('Juan') || i.propietario?.includes('Juangas')
-  );
+  // Usar TODOS los items (sin filtro de propietario)
+  const juanItems = items;
 
   // ────────────────────────────────────────────────────────────────
   // CÁLCULOS BÁSICOS
@@ -2994,27 +2992,27 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
   const inicioSemana = new Date(hoy);
   inicioSemana.setDate(hoy.getDate() - hoy.getDay()); // Lunes
 
-  // Status rápido
-  const onTrack = juanItems.filter(i => i.estado === 'inprogress').length;
-  const enPeligro = juanItems.filter(i => i.estado === 'blocked').length;
-  const completados = juanItems.filter(i => i.estado === 'done').length;
+  // Status rápido - usar 'status' que es el campo correcto en BD
+  const onTrack = juanItems.filter(i => i.status === 'inprogress').length;
+  const enPeligro = juanItems.filter(i => i.status === 'blocked').length;
+  const completados = juanItems.filter(i => i.status === 'done').length;
   const total = juanItems.length;
 
-  // Lo que cerró esta semana (estado === done Y completedAt >= lunes)
+  // Lo que cerró esta semana (status === done Y completedAt >= lunes)
   const cerradosEstaSemana = juanItems.filter(i => {
-    if (i.estado !== 'done') return false;
+    if (i.status !== 'done') return false;
     // Si tienes timestamp de completado, usarlo; si no, aproximar por notas
     return true; // TODO: ajustar con tu lógica de timestamps
   });
 
-  // Riesgos y blockers (estado bloqueado + P0/P1)
+  // Riesgos y blockers (status bloqueado + P0/P1)
   const riesgos = juanItems.filter(i =>
-    i.estado === 'blocked' || (i.estado === 'inprogress' && (i.prioridad === 'P0' || i.prioridad === 'P1'))
+    i.status === 'blocked' || (i.status === 'inprogress' && (i.prioridad === 'P0' || i.prioridad === 'P1'))
   );
 
-  // Próximos 7 días (estado !== done Y fechaFin < hoy+7d)
+  // Próximos 7 días (status !== done Y fechaFin < hoy+7d)
   const proximosSieteDias = juanItems.filter(i => {
-    if (i.estado === 'done') return false;
+    if (i.status === 'done') return false;
     if (!i.fechaFin) return false;
     const fecha = new Date(i.fechaFin);
     return fecha >= hoy && fecha <= new Date(hoy.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -3023,7 +3021,7 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
   // Temas P0/P1 en curso o bloqueados
   const temasAltos = juanItems.filter(i =>
     (i.prioridad === 'P0' || i.prioridad === 'P1') &&
-    (i.estado === 'inprogress' || i.estado === 'blocked')
+    (i.status === 'inprogress' || i.status === 'blocked')
   );
 
   // ────────────────────────────────────────────────────────────────
@@ -3289,8 +3287,8 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: isMobile ? '0.75rem' : '1rem' }}>
             {riesgos.slice(0, isMobile ? 3 : undefined).map(item => (
               <div key={item.id} style={{
-                background: item.estado === 'blocked' ? '#fef2f2' : '#fffbeb',
-                border: `1px solid ${item.estado === 'blocked' ? '#fecaca' : '#fde68a'}`,
+                background: item.status === 'blocked' ? '#fef2f2' : '#fffbeb',
+                border: `1px solid ${item.status === 'blocked' ? '#fecaca' : '#fde68a'}`,
                 borderLeft: `4px solid ${item.prioridad === 'P0' ? '#dc2626' : '#f59e0b'}`,
                 borderRadius: '0.375rem',
                 padding: isMobile ? '0.75rem' : '1rem',
