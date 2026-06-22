@@ -223,7 +223,9 @@ IMPORTANTE: Los códigos BPMOC son únicos e inmutables. Si encuentras BPMOC214 
   "extractedComment": "resumen del contenido relevante para comentario"
 }
 
-Sé conciso en los comentarios. Máximo 200 caracteres.`
+Sé conciso en los comentarios. Máximo 200 caracteres.
+
+IMPORTANTE: Retorna SOLO el JSON, nada más. Sin explicaciones, sin markdown.`
 
   try {
     const message = await client.messages.create({
@@ -233,13 +235,30 @@ Sé conciso en los comentarios. Máximo 200 caracteres.`
     })
 
     const text = message.content[0].type === 'text' ? message.content[0].text : ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      log('No JSON encontrado en respuesta de Claude', 'error')
+
+    // Extraer JSON: buscar desde el primer { hasta el último }
+    const firstBrace = text.indexOf('{')
+    const lastBrace = text.lastIndexOf('}')
+
+    if (firstBrace === -1 || lastBrace === -1 || firstBrace >= lastBrace) {
+      log('No JSON válido encontrado en respuesta de Claude', 'error')
+      log(`Respuesta: ${text.substring(0, 200)}...`, 'error')
       return null
     }
 
-    return JSON.parse(jsonMatch[0])
+    const jsonStr = text.substring(firstBrace, lastBrace + 1)
+
+    // Intentar parsear
+    let result
+    try {
+      result = JSON.parse(jsonStr)
+    } catch (parseError) {
+      log(`Error parseando JSON: ${parseError.message}`, 'error')
+      log(`JSON recibido: ${jsonStr.substring(0, 300)}...`, 'error')
+      return null
+    }
+
+    return result
   } catch (e) {
     log(`Error en Claude API: ${e.message}`, 'error')
     return null
