@@ -3368,23 +3368,6 @@ const Cristina = ({ items = [], proyectos = [], idioma = 'ES' }) => {
   )
 }
 
-// ── Otros componentes ────────────────────────────────────────────────
-
-const DummyComponent = () => null
-        color: '#9ca3af',
-        textAlign: 'center',
-        overflow: 'hidden'
-      }}>
-        <p style={{ margin: 0, wordBreak: 'break-word' }}>
-          👤 {idioma === 'ES' ? 'Datos de' : 'Data from'} Juan Rodriguez • {idioma === 'ES' ? 'Realtime' : 'Real-time'}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-// ── Main App ──────────────────────────────────────────────────────────────────
-
 // ── NuevoTema ─────────────────────────────────────────────────────────────────
 const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
   const [tema,   setTema]   = useState('')
