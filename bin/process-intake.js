@@ -193,10 +193,13 @@ ${itemList}
 ${proyList}
 
 ## INSTRUCCIONES
-1. Identifica qué tema(s) o proyecto(s) del documento se relacionan con los elementos de OpsBoard
-2. Si hay múltiples posibilidades, lista las más probables
-3. Extrae cambios, estados nuevos, comentarios relevantes, fechas
-4. Responde ÚNICAMENTE con un JSON válido, sin markdown:
+1. **PRIMERO: Busca códigos BPMOC### en el documento** - si encuentra uno, búscalo exactamente en la lista
+2. Si no encuentra código BPMOC, identifica qué tema(s) o proyecto(s) se relacionan por nombre
+3. Si hay múltiples posibilidades, lista las más probables
+4. Extrae cambios, estados nuevos, comentarios relevantes, fechas
+5. Responde ÚNICAMENTE con un JSON válido, sin markdown:
+
+IMPORTANTE: Los códigos BPMOC son únicos e inmutables. Si encuentras BPMOC214 en el documento, busca exactamente "BPMOC214" en los temas disponibles.
 
 {
   "matches": [
