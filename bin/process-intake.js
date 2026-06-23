@@ -264,38 +264,27 @@ Estructura:
 
     const jsonStr = text.substring(firstBrace, lastBrace + 1)
 
+    // Guardar JSON para debugging
+    const jsonLogPath = path.join(PROCESSED_FOLDER, `debug-${Date.now()}.json`)
+
     // Intentar parsear - con intentos de reparación
     let result
     try {
       result = JSON.parse(jsonStr)
     } catch (parseError) {
-      // Intento 1: Limpiar comillas sin escapar dentro de strings
-      let repairedJson = jsonStr
-        .replace(/: "([^"]*)$/gm, ': "$1"') // Cerrar strings sin cerrar
-        .replace(/([^\\])"([^\\])"([^:])/g, '$1\\"$2\\"$3') // Escapar comillas internas
+      // Guardar JSON problemático para análisis
+      fs.writeFileSync(jsonLogPath, jsonStr, 'utf8')
 
-      try {
-        result = JSON.parse(repairedJson)
-      } catch (retryError) {
-        // Intento 2: Extraer solo los matches sin updates si fallan
-        const matchesMatch = jsonStr.match(/"matches":\s*\[([\s\S]*?)\],/)
-        if (matchesMatch) {
-          try {
-            result = {
-              matches: JSON.parse('[' + matchesMatch[1] + ']'),
-              updates: [],
-              needsConfirmation: false,
-              extractedComment: 'Análisis parcial (JSON malformado)'
-            }
-          } catch (e) {
-            log(`Error parseando JSON incluso con reparación: ${parseError.message}`, 'error')
-            return null
-          }
-        } else {
-          log(`Error parseando JSON: ${parseError.message}`, 'error')
-          log(`JSON recibido: ${jsonStr.substring(0, 300)}...`, 'error')
-          return null
-        }
+      log(`JSON guardado para análisis: ${jsonLogPath}`, 'warn')
+      log(`Error en posición ${parseError.message.match(/position \d+/)?.[0] || 'desconocida'}`, 'error')
+
+      // Fallback: crear resultado vacío para continuar
+      log(`Usando análisis fallback (sin updates)`, 'warn')
+      result = {
+        matches: [],
+        updates: [],
+        needsConfirmation: false,
+        extractedComment: 'Error en análisis - ver log'
       }
     }
 

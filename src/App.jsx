@@ -186,7 +186,7 @@ async function fetchAll() {
   // campanas error is non-fatal (table may be empty)
   return {
     items:     (iData || []).map(dbToItem),
-    proyectos: (pData || []),
+    proyectos: (pData || []).map(dbToProy),
     campanas:  (cData || []),
   }
 }
