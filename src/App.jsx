@@ -3935,6 +3935,87 @@ const IntakeModal = ({ onClose, onExecute, onToast }) => {
   )
 }
 
+// ── PLAN DE ACCIÓN ─────────────────────────────────────────────────────────
+const PlanAccion = () => {
+  const [planData, setPlanData] = useState([])
+  const [seccionActiva, setSeccionActiva] = useState('EXCLUSIVE')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadPlanData()
+  }, [])
+
+  const loadPlanData = async () => {
+    try {
+      const { data, error } = await supabase.from('plan_accion').select('*').order('seccion', { ascending: true })
+      if (error) throw error
+      setPlanData(data || [])
+    } catch (err) {
+      console.error('Error loading plan_accion:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const secciones = [...new Set(planData.map(p => p.seccion))].sort()
+  const acciones = planData.filter(p => p.seccion === seccionActiva)
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg, overflow:'hidden' }}>
+      {/* Tabs de secciones */}
+      <div style={{ display:'flex', gap:8, padding:'16px 20px', background:C.surface, borderBottom:`1px solid ${C.border}`, overflowX:'auto', flexShrink:0 }}>
+        {secciones.map(sec => (
+          <button key={sec}
+            onClick={() => setSeccionActiva(sec)}
+            style={{ padding:'8px 14px', borderRadius:6, border:'none', background:seccionActiva===sec?C.accent:'transparent', color:seccionActiva===sec?'#fff':C.muted, cursor:'pointer', fontWeight:seccionActiva===sec?600:500, fontSize:12, whiteSpace:'nowrap', transition:'all 120ms' }}>
+            {sec}
+          </button>
+        ))}
+      </div>
+
+      {/* Tabla scrolleable */}
+      <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+        {loading ? (
+          <div style={{ textAlign:'center', padding:'40px 20px', color:C.muted }}>Cargando...</div>
+        ) : acciones.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'40px 20px', color:C.muted }}>Sin acciones en esta sección</div>
+        ) : (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, background:C.card, borderRadius:8, overflow:'hidden', border:`1px solid ${C.border}` }}>
+            <thead>
+              <tr style={{ background:C.bg, borderBottom:`1px solid ${C.border}` }}>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Acción</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Owner</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Fecha Entrega</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Q2</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Q3</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Q4</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {acciones.map(acc => (
+                <tr key={acc.id} style={{ borderBottom:`1px solid ${C.border}`, '&:hover': { background:C.bg } }}>
+                  <td style={{ padding:'10px 12px', color:C.text }}>{acc.accion}</td>
+                  <td style={{ padding:'10px 12px', color:C.muted, fontSize:11 }}>{acc.propietario || '—'}</td>
+                  <td style={{ padding:'10px 12px', color:C.muted, fontSize:11 }}>{acc.fecha_entrega}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600, color:acc.q2_ingresos ? '#10b981' : C.muted }}>{acc.q2_ingresos?.toFixed(2) || '—'}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600, color:acc.q3_ingresos ? '#10b981' : C.muted }}>{acc.q3_ingresos?.toFixed(2) || '—'}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600, color:acc.q4_ingresos ? '#10b981' : C.muted }}>{acc.q4_ingresos?.toFixed(2) || '—'}</td>
+                  <td style={{ padding:'10px 12px' }}>
+                    <span style={{ padding:'2px 8px', borderRadius:4, background:acc.status==='inprogress'?'#fef3c7':'#f3f4f6', color:acc.status==='inprogress'?'#92400e':'#6b7280', fontSize:10, fontWeight:600 }}>
+                      {acc.status==='inprogress'?'En curso':'Pendiente'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function OpsBoard() {
   const [vista,       setVista]      = useState('Dashboard')
   const [lang,        setLang]       = useState('es')
@@ -4064,12 +4145,13 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
     'Tablero':            'Tablero de Temas',
     '🗂️ Proyectos':      'Proyectos',
+    '📋 Plan de Acción':  'Plan de Acción 26/27',
     '📋 Reporte Semanal': 'Reporte Semanal Ejecutivo',
     '📅 Campañas CVM':   'Campañas CVM',
     '✨ IA Intake':       'IA Intake',
@@ -4081,6 +4163,7 @@ export default function OpsBoard() {
     'Dashboard':          '◈',
     'Tablero':            '⊞',
     '🗂️ Proyectos':      '◫',
+    '📋 Plan de Acción':  '◐',
     '📋 Reporte Semanal': '≡',
     '📅 Campañas CVM':   '◷',
     '✨ IA Intake':       '✦',
@@ -4292,6 +4375,7 @@ export default function OpsBoard() {
               )}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
+              {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
               {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={async (id) => { await sbDeleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
