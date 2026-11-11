@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from './lib/supabase.js'
+import {
+  uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
+  updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
+  listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion,
+} from './lib/api/index.js'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -87,7 +91,6 @@ const tipoColor   = t => TIPO_COLORS[norm(t)]   || '#0891b2'
 const estadoCColor = e => ESTADO_CAMP_COLORS[norm(e)] || '#64748b'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const uid       = () => Math.random().toString(36).slice(2, 9)
 const pad       = n  => String(n).padStart(2, '0')
 const fmtFecha  = d => {
   if (!d) return '—'
@@ -131,115 +134,6 @@ const saveProjectComment = (k, text) => {
   const item = { k, ts, text, id:uid(), iso:now.toISOString() }
   lsSet(PROJ_COMMENTS_KEY, [item, ...all].slice(0, 300))
   return item
-}
-
-// ── Supabase helpers ─────────────────────────────────────────────────────────
-function dbToItem(row) {
-  return {
-    ...row,
-    estadoSheet: row.estado_sheet || 'No iniciado',
-    fechaInicio: row.fecha_inicio ? new Date(row.fecha_inicio) : null,
-    fechaFin:    row.fecha_fin    ? new Date(row.fecha_fin)    : null,
-    subtareas:   Array.isArray(row.subtareas) ? row.subtareas : [],
-  }
-}
-function itemToDb(item) {
-  return {
-    id:           item.id,
-    tema:         item.tema || '',
-    objetivo:     item.objetivo || '',
-    category:     item.category || 'projects',
-    propietario:  item.propietario || '',
-    prioridad:    item.prioridad || '',
-    risk:         item.risk || 'green',
-    status:       item.status || 'pending',
-    estado_sheet: item.estadoSheet || 'No iniciado',
-    fecha_inicio: item.fechaInicio instanceof Date ? item.fechaInicio.toISOString() : (item.fechaInicio || null),
-    fecha_fin:    item.fechaFin    instanceof Date ? item.fechaFin.toISOString()    : (item.fechaFin    || null),
-    archivos:     item.archivos || '',
-    notas:        item.notas || '',
-    proyecto:     item.proyecto || '',
-    subtareas:    item.subtareas || [],
-  }
-}
-function dbToProy(row) {
-  return {
-    ...row,
-    // Map snake_case DB fields to camelCase used by components
-    status:      row.status || mapSt(row.estado || ''),
-    fechaInicio: row.fecha_inicio ? new Date(row.fecha_inicio) : null,
-    fechaFin:    row.fecha_fin    ? new Date(row.fecha_fin)    : null,
-    fase:        row.fase        || '',
-    capex:       row.capex       ?? null,
-    nombreEN:    row.nombre_en   || '',
-  }
-}
-
-async function fetchAll() {
-  const [{ data: iData, error: e1 }, { data: pData, error: e2 }, { data: cData, error: e3 }] = await Promise.all([
-    supabase.from('items').select('*').order('created_at', { ascending: false }),
-    supabase.from('proyectos').select('*').order('created_at', { ascending: false }),
-    supabase.from('campanas').select('*').order('created_at', { ascending: false }),
-  ])
-  if (e1) throw new Error('items: ' + e1.message)
-  if (e2) throw new Error('proyectos: ' + e2.message)
-  // campanas error is non-fatal (table may be empty)
-  return {
-    items:     (iData || []).map(dbToItem),
-    proyectos: (pData || []).map(dbToProy),
-    campanas:  (cData || []),
-  }
-}
-
-async function sbUpdate(id, fields) {
-  const { error } = await supabase.from('items').update(fields).eq('id', id)
-  if (error) throw new Error(error.message)
-}
-
-async function sbUpdateProyecto(id, fields) {
-  const { error } = await supabase.from('proyectos').update(fields).eq('id', id)
-  if (error) throw new Error(error.message)
-}
-
-async function sbDeleteItem(id) {
-  const { error } = await supabase.from('items').delete().eq('id', id)
-  if (error) throw new Error(error.message)
-}
-
-// Hitos
-async function fetchHitos(proyectoId) {
-  const { data, error } = await supabase.from('hitos').select('*').eq('proyecto_id', proyectoId).order('orden', { ascending: true })
-  if (error) throw new Error(error.message)
-  return data || []
-}
-
-async function addHito(proyectoId, nombre, fechaPrevista) {
-  const { data, error } = await supabase.from('hitos').insert({ id:uid(), proyecto_id:proyectoId, nombre, fecha_prevista:fechaPrevista, orden:0 }).select()
-  if (error) throw new Error(error.message)
-  return data?.[0]
-}
-
-async function updateHito(id, fields) {
-  const { error } = await supabase.from('hitos').update(fields).eq('id', id)
-  if (error) throw new Error(error.message)
-}
-
-async function deleteHito(id) {
-  const { error } = await supabase.from('hitos').delete().eq('id', id)
-  if (error) throw new Error(error.message)
-}
-
-// Comentarios de proyecto
-async function fetchProyectoComments(proyectoId) {
-  const { data, error } = await supabase.from('comentarios').select('*').eq('proyecto_id', proyectoId).eq('item_id', null).order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
-  return data || []
-}
-
-async function addProyectoComment(proyectoId, texto) {
-  const { data, error } = await supabase.from('comentarios').insert({ id:uid(), proyecto_id:proyectoId, item_id:null, texto, ts:new Date().toLocaleString('es-ES') }).select()
-  if (error) throw new Error(error.message)
-  return data?.[0]
 }
 
 // Fire-and-forget email notification when a task is assigned to Juan or Fran
@@ -1755,8 +1649,8 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
   useEffect(() => {
     const cargar = async () => {
       try {
-        const h = await fetchHitos(proyecto.id)
-        const c = await fetchProyectoComments(proyecto.id)
+        const h = await listHitos(proyecto.id)
+        const c = await listProyectoComments(proyecto.id)
         setHitos(h)
         setComentarios(c)
       } catch (e) {
@@ -1771,7 +1665,7 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
   const agregarHito = async () => {
     if (!newHitoName.trim()) return
     try {
-      const hito = await addHito(proyecto.id, newHitoName, newHitoDate || null)
+      const hito = await apiAddHito({ id:uid(), proyecto_id:proyecto.id, nombre:newHitoName, fecha_prevista:newHitoDate || null, orden:0 })
       setHitos([...hitos, hito])
       setNewHitoName('')
       setNewHitoDate('')
@@ -1801,7 +1695,7 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
   const agregarComentario = async () => {
     if (!newComment.trim()) return
     try {
-      const comentario = await addProyectoComment(proyecto.id, newComment)
+      const comentario = await apiAddProyectoComment({ id:uid(), proyecto_id:proyecto.id, item_id:null, texto:newComment, ts:new Date().toLocaleString('es-ES') })
       setComentarios([comentario, ...comentarios])
       setNewComment('')
     } catch (e) {
@@ -1811,7 +1705,7 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
 
   const guardarProyecto = async () => {
     try {
-      await sbUpdateProyecto(proyecto.id, {
+      await updateProyecto(proyecto.id, {
         nombre: proyForm.nombre,
         descripcion: proyForm.descripcion,
         fecha_inicio: proyForm.fechaInicio || null,
@@ -1826,7 +1720,7 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
 
   const moverAlBacklog = async () => {
     try {
-      await sbUpdateProyecto(proyecto.id, { status: 'backlog' })
+      await updateProyecto(proyecto.id, { status: 'backlog' })
       onClose()
       onSave?.()
     } catch (e) {
@@ -2261,7 +2155,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
                             {ST.filter(s => s.id !== 'backlog').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                           </select>
                           <button
-                            onClick={e => { e.stopPropagation(); sbUpdateProyecto(p.id, { status:activarProySt }); setActivarProyId(null); window.location.reload() }}
+                            onClick={e => { e.stopPropagation(); updateProyecto(p.id, { status:activarProySt }); setActivarProyId(null); window.location.reload() }}
                             style={{ fontSize:11, padding:'3px 10px', borderRadius:5, background:C.accent, color:'#fff', border:'none', cursor:'pointer', fontWeight:600 }}>
                             Activar
                           </button>
@@ -3935,84 +3829,63 @@ const IntakeModal = ({ onClose, onExecute, onToast }) => {
   )
 }
 
+
 // ── PLAN DE ACCIÓN ─────────────────────────────────────────────────────────
 const PlanAccion = () => {
-  const [planData, setPlanData] = useState([])
-  const [seccionActiva, setSeccionActiva] = useState('EXCLUSIVE')
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    loadPlanData()
-  }, [])
-
-  const loadPlanData = async () => {
-    try {
-      const { data, error } = await supabase.from('plan_accion').select('*').order('seccion', { ascending: true })
-      if (error) throw error
-      setPlanData(data || [])
-    } catch (err) {
-      console.error('Error loading plan_accion:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const secciones = [...new Set(planData.map(p => p.seccion))].sort()
-  const acciones = planData.filter(p => p.seccion === seccionActiva)
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg, overflow:'hidden' }}>
-      {/* Tabs de secciones */}
-      <div style={{ display:'flex', gap:8, padding:'16px 20px', background:C.surface, borderBottom:`1px solid ${C.border}`, overflowX:'auto', flexShrink:0 }}>
-        {secciones.map(sec => (
-          <button key={sec}
-            onClick={() => setSeccionActiva(sec)}
-            style={{ padding:'8px 14px', borderRadius:6, border:'none', background:seccionActiva===sec?C.accent:'transparent', color:seccionActiva===sec?'#fff':C.muted, cursor:'pointer', fontWeight:seccionActiva===sec?600:500, fontSize:12, whiteSpace:'nowrap', transition:'all 120ms' }}>
-            {sec}
-          </button>
-        ))}
-      </div>
-
-      {/* Tabla scrolleable */}
-      <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
-        {loading ? (
-          <div style={{ textAlign:'center', padding:'40px 20px', color:C.muted }}>Cargando...</div>
-        ) : acciones.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'40px 20px', color:C.muted }}>Sin acciones en esta sección</div>
-        ) : (
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, background:C.card, borderRadius:8, overflow:'hidden', border:`1px solid ${C.border}` }}>
-            <thead>
-              <tr style={{ background:C.bg, borderBottom:`1px solid ${C.border}` }}>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Acción</th>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Owner</th>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Fecha Entrega</th>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Q2</th>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Q3</th>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Q4</th>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600, color:C.text }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {acciones.map(acc => (
-                <tr key={acc.id} style={{ borderBottom:`1px solid ${C.border}`, '&:hover': { background:C.bg } }}>
-                  <td style={{ padding:'10px 12px', color:C.text }}>{acc.accion}</td>
-                  <td style={{ padding:'10px 12px', color:C.muted, fontSize:11 }}>{acc.propietario || '—'}</td>
-                  <td style={{ padding:'10px 12px', color:C.muted, fontSize:11 }}>{acc.fecha_entrega}</td>
-                  <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600, color:acc.q2_ingresos ? '#10b981' : C.muted }}>{acc.q2_ingresos?.toFixed(2) || '—'}</td>
-                  <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600, color:acc.q3_ingresos ? '#10b981' : C.muted }}>{acc.q3_ingresos?.toFixed(2) || '—'}</td>
-                  <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600, color:acc.q4_ingresos ? '#10b981' : C.muted }}>{acc.q4_ingresos?.toFixed(2) || '—'}</td>
-                  <td style={{ padding:'10px 12px' }}>
-                    <span style={{ padding:'2px 8px', borderRadius:4, background:acc.status==='inprogress'?'#fef3c7':'#f3f4f6', color:acc.status==='inprogress'?'#92400e':'#6b7280', fontSize:10, fontWeight:600 }}>
-                      {acc.status==='inprogress'?'En curso':'Pendiente'}
-                    </span>
-                  </td>
+    const [planData, setPlanData] = useState([])
+    const [seccionActiva, setSeccionActiva] = useState('EXCLUSIVE')
+    const [loading, setLoading] = useState(true)
+    useEffect(() => {
+      const load = async () => {
+        try {
+          setPlanData(await listPlanAccion())
+        } catch (e) { console.error(e) }
+        finally { setLoading(false) }
+      }
+      load()
+    }, [])
+    const secciones = [...new Set(planData.map(p => p.seccion))].sort()
+    const acciones = planData.filter(p => p.seccion === seccionActiva)
+    return (
+      <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg, overflow:'hidden' }}>
+        <div style={{ display:'flex', gap:8, padding:'16px 20px', background:C.surface, borderBottom:`1px solid ${C.border}`, overflowX:'auto', flexShrink:0 }}>
+          {secciones.map(sec => (
+            <button key={sec} onClick={() => setSeccionActiva(sec)} style={{ padding:'8px 14px', borderRadius:6, border:'none', background:seccionActiva===sec?C.accent:'transparent', color:seccionActiva===sec?'#fff':C.muted, cursor:'pointer', fontWeight:seccionActiva===sec?600:500, fontSize:12, whiteSpace:'nowrap', transition:'all 120ms' }}>
+              {sec}
+            </button>
+          ))}
+        </div>
+        <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+          {loading ? <div style={{ textAlign:'center', padding:'40px', color:C.muted }}>Cargando...</div> : acciones.length === 0 ? <div style={{ textAlign:'center', padding:'40px', color:C.muted }}>Sin acciones</div> : (
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+              <thead>
+                <tr style={{ background:C.bg, borderBottom:`1px solid ${C.border}` }}>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600 }}>Acción</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600 }}>Owner</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontWeight:600 }}>Fecha</th>
+                  <th style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>Q2</th>
+                  <th style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>Q3</th>
+                  <th style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>Q4</th>
+                  <th style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {acciones.map(a => (
+                  <tr key={a.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                    <td style={{ padding:'10px 12px' }}>{a.accion}</td>
+                    <td style={{ padding:'10px 12px', color:C.muted, fontSize:11 }}>{a.propietario || '—'}</td>
+                    <td style={{ padding:'10px 12px', color:C.muted, fontSize:11 }}>{a.fecha_entrega}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>{a.q2_ingresos?.toFixed(2) || '—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>{a.q3_ingresos?.toFixed(2) || '—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'center', fontWeight:600 }}>{a.q4_ingresos?.toFixed(2) || '—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'center' }}><span style={{ padding:'2px 8px', borderRadius:4, background:a.status==='inprogress'?'#fef3c7':'#f3f4f6', fontSize:10, fontWeight:600 }}>{a.status==='inprogress'?'En curso':'Pendiente'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-    </div>
   )
 }
 
@@ -4041,7 +3914,7 @@ export default function OpsBoard() {
   const loadData = async () => {
     setLoading(true); setError(null)
     try {
-      const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys } = await fetchAll()
+      const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys } = await loadAll()
       setItems(fetched)
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
@@ -4055,32 +3928,24 @@ export default function OpsBoard() {
   useEffect(() => {
     loadData()
     // Real-time subscription — any change in Supabase updates all users instantly
-    const sub = supabase
-      .channel('items-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, payload => {
-        if (payload.eventType === 'INSERT') {
-          setItems(prev => [dbToItem(payload.new), ...prev.filter(i => i.id !== payload.new.id)])
-        } else if (payload.eventType === 'UPDATE') {
-          setItems(prev => prev.map(i => i.id === payload.new.id ? dbToItem(payload.new) : i))
-        } else if (payload.eventType === 'DELETE') {
-          setItems(prev => prev.filter(i => i.id !== payload.old.id))
-        }
-      })
-      .subscribe()
-    realtimeSub.current = sub
-    return () => { supabase.removeChannel(sub) }
+    const unsubscribe = subscribeToItems({
+      onInsert: item => setItems(prev => [item, ...prev.filter(i => i.id !== item.id)]),
+      onUpdate: item => setItems(prev => prev.map(i => i.id === item.id ? item : i)),
+      onDelete: id   => setItems(prev => prev.filter(i => i.id !== id)),
+    })
+    realtimeSub.current = unsubscribe
+    return unsubscribe
   }, [])
 
   const addLocalItem = async item => {
-    const { error } = await supabase.from('items').insert([itemToDb(item)])
-    if (error) { setToast('⚠ Error al guardar: ' + error.message); return }
+    try { await insertItems([item]) }
+    catch (error) { setToast('⚠ Error al guardar: ' + error.message); return }
     setItems(prev => [item, ...prev])
     setToast('✓ Tarea guardada')
   }
   const addLocalItems = async newItems => {
-    const rows = newItems.map(itemToDb)
-    const { error } = await supabase.from('items').insert(rows)
-    if (error) { setToast('⚠ Error al guardar: ' + error.message); return }
+    try { await insertItems(newItems) }
+    catch (error) { setToast('⚠ Error al guardar: ' + error.message); return }
     setItems(prev => [...newItems, ...prev])
     setToast('✓ ' + newItems.length + ' tarea(s) guardadas')
   }
@@ -4088,23 +3953,8 @@ export default function OpsBoard() {
   const onItemChange = (id, fields) => {
     // Optimistic update
     setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
-    // Persist to Supabase (map camelCase to snake_case for DB columns)
-    const dbFields = {}
-    if (fields.status       !== undefined) dbFields.status       = fields.status
-    if (fields.estadoSheet  !== undefined) dbFields.estado_sheet = fields.estadoSheet
-    if (fields.propietario  !== undefined) dbFields.propietario  = fields.propietario
-    if (fields.prioridad    !== undefined) dbFields.prioridad    = fields.prioridad
-    if (fields.risk         !== undefined) dbFields.risk         = fields.risk
-    if (fields.fechaFin     !== undefined) dbFields.fecha_fin    = fields.fechaFin instanceof Date ? fields.fechaFin.toISOString() : fields.fechaFin
-    if (fields.fechaInicio  !== undefined) dbFields.fecha_inicio = fields.fechaInicio instanceof Date ? fields.fechaInicio.toISOString() : fields.fechaInicio
-    if (fields.notas        !== undefined) dbFields.notas        = fields.notas
-    if (fields.objetivo     !== undefined) dbFields.objetivo     = fields.objetivo
-    if (fields.tema         !== undefined) dbFields.tema         = fields.tema
-    if (fields.propietario  !== undefined) dbFields.propietario  = fields.propietario
-    if (fields.category     !== undefined) dbFields.category     = fields.category
-    if (fields.proyecto     !== undefined) dbFields.proyecto     = fields.proyecto
-    if (fields.subtareas    !== undefined) dbFields.subtareas    = fields.subtareas
-    if (Object.keys(dbFields).length) sbUpdate(id, dbFields).catch(e => console.error('[onItemChange]', e))
+    // Persist (the data layer maps camelCase -> DB columns and skips empty patches)
+    updateItem(id, fields).catch(e => console.error('[onItemChange]', e))
   }
 
   const onNextSt = (id, newSt) => {
@@ -4130,8 +3980,7 @@ export default function OpsBoard() {
     // Eliminar tema viejo
     setAllItems(prev => prev.filter(i => i.id !== temaViejoId))
     // Guardar en Supabase
-    supabase.from('items').update({ tema: tituloFinal, notas: notasFinal }).eq('id', temaDestId).catch(e => console.error('[onUnifyTema update]', e))
-    supabase.from('items').delete().eq('id', temaViejoId).catch(e => console.error('[onUnifyTema delete]', e))
+    mergeItems({ keepId: temaDestId, removeId: temaViejoId, tema: tituloFinal, notas: notasFinal }).catch(e => console.error('[onUnifyTema]', e))
   }
 
   useEffect(() => {
@@ -4315,8 +4164,7 @@ export default function OpsBoard() {
                 if (items.length === 0) {
                   const sheetItems = buildItems(tables)
                   if (sheetItems.length) {
-                    const { error: e1 } = await supabase.from('items').insert(sheetItems.map(itemToDb))
-                    if (e1) throw new Error('items: ' + e1.message)
+                    try { await insertItems(sheetItems) } catch (e1) { throw new Error('items: ' + e1.message) }
                     migratedItems = sheetItems.length
                   }
                 }
@@ -4333,8 +4181,7 @@ export default function OpsBoard() {
                     capex: p.capex||null, nombre_en: p.nombreEN||'',
                   }))
                   if (proyRows.length) {
-                    const { error: e2 } = await supabase.from('proyectos').insert(proyRows)
-                    if (e2) throw new Error('proyectos: ' + e2.message)
+                    await insertProyectoRows(proyRows)
                     migratedProys = proyRows.length
                   } else {
                     setToast('⚠ No se encontraron proyectos en el Sheet')
@@ -4378,7 +4225,7 @@ export default function OpsBoard() {
               {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
-              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={async (id) => { await sbDeleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
+              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={async (id) => { await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
           )}
