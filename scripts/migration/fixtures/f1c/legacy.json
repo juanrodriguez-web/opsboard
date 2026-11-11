@@ -1,0 +1,21 @@
+{
+  "proyectos": [
+    { "id": "p1", "nombre": "Bonos Prepago", "propietario": "", "prioridad": "", "status": "pending", "estado": "No iniciado" },
+    { "id": "p2", "nombre": "Gamificación", "propietario": "", "prioridad": "", "status": "pending", "estado": "No iniciado", "descripcion": "Desc DB", "capex": 500 },
+    { "id": "p3", "nombre": "Tab\tName", "propietario": "", "prioridad": "", "status": "pending", "estado": "No iniciado" },
+    { "id": "p4", "nombre": "Otro Proyecto", "propietario": "Juan Rodriguez Peisel", "prioridad": "P3", "status": "inprogress", "estado": "En curso", "fecha_inicio": "2026-01-10T23:00:00Z", "descripcion": "Desc P4", "created_at": "2026-06-16T09:40:11Z", "updated_at": "2026-06-22T22:00:00Z" },
+    { "id": "p5", "nombre": "Nombre Doble", "propietario": "", "prioridad": "", "status": "pending", "estado": "No iniciado" },
+    { "id": "p6", "nombre": "Sensible Vaciada", "propietario": "", "prioridad": "", "status": "pending", "estado": "No iniciado", "descripcion": "", "created_at": "2026-06-16T09:40:11Z", "updated_at": "2026-06-22T22:00:00Z" }
+  ],
+  "items": [
+    { "id": "i1", "tema": "Tema Uno", "propietario": "Juan Rodriguez Peisel", "prioridad": "P1", "risk": "green", "status": "done", "estado_sheet": "Hecho", "proyecto": "Bonos Prepago", "category": "tools" },
+    { "id": "i2", "tema": "Tema Dos", "propietario": "", "prioridad": "", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "", "category": "tools" },
+    { "id": "i3", "tema": "Tema  Tres", "propietario": "", "prioridad": "", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "", "category": "tools" },
+    { "id": "i4", "tema": "Duplicado", "propietario": "", "prioridad": "", "risk": "green", "status": "done", "estado_sheet": "Hecho", "proyecto": "", "category": "tools" },
+    { "id": "i5", "tema": "duplicado", "propietario": "", "prioridad": "", "risk": "green", "status": "done", "estado_sheet": "Hecho", "proyecto": "", "category": "tools" },
+    { "id": "i6", "tema": "Held Owner", "propietario": "Nadie Conocido", "prioridad": "", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "", "category": "tools" }
+  ],
+  "hitos": [],
+  "comentarios": [],
+  "campanas": []
+}

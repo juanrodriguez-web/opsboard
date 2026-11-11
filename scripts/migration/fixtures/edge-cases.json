@@ -1,0 +1,31 @@
+{
+  "proyectos": [
+    { "id": "p1", "nombre": "Bonos Prepago", "propietario": "Juan Rodriguez Peisel", "prioridad": "P1", "status": "inprogress", "estado": "En curso", "fase": "Desarrollo", "capex": 1500.5, "desarrollo": "IT", "descripcion": "d", "notas": "n", "nombre_en": "Prepaid bundles", "fecha_inicio": "2026-01-10T00:00:00Z", "fecha_fin": "2026-06-30T00:00:00Z" },
+    { "id": "p2", "nombre": "Gamificación", "propietario": "", "status": "blocked", "estado": "En riesgo", "fase": "TO DO" },
+    { "id": "p3", "nombre": "4.\tDATE ONLY", "propietario": "", "status": "backlog", "estado": "No iniciado" },
+    { "id": "p4", "nombre": "Proyecto Fantasma", "propietario": "Persona Desconocida", "status": "pending" },
+    { "id": "p5", "nombre": "Estado Raro", "propietario": "", "status": "weird" },
+    { "id": "p6", "nombre": "Dup A", "propietario": "", "status": "pending" },
+    { "id": "p7", "nombre": "dup   á", "propietario": "", "status": "pending" },
+    { "id": "p8", "nombre": "DUP a", "propietario": "", "status": "pending" }
+  ],
+  "items": [
+    { "id": "i1", "tema": "OK con proyecto", "category": "product", "propietario": "Francisco Toledo", "prioridad": "P0", "risk": "red", "status": "inprogress", "estado_sheet": "Según lo planificado", "proyecto": "bonos prepago", "fecha_inicio": "2026-02-01T00:00:00Z", "fecha_fin": "2026-03-01T00:00:00Z", "subtareas": [{ "id": "s1", "title": "a", "status": "pending", "prop": "", "risk": "green", "notas": "", "fechaFin": null }], "objetivo": "obj", "notas": "n", "archivos": "a.pdf" },
+    { "id": "i2", "tema": "Sin proyecto ni owner", "category": "tools", "propietario": "", "prioridad": "", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "" },
+    { "id": "i3", "tema": "Proyecto inexistente", "category": "tools", "propietario": "Juan Rodriguez Peisel", "prioridad": "P2", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "No Existe" },
+    { "id": "i4", "tema": "Owner desconocido", "category": "cvm", "propietario": "Alguien", "prioridad": "P3", "risk": "yellow", "status": "done", "estado_sheet": "Hecho", "proyecto": "" },
+    { "id": "i5", "tema": "Status raro", "category": "cvm", "propietario": "", "prioridad": "P3", "risk": "yellow", "status": "cancelled", "estado_sheet": "x", "proyecto": "" },
+    { "id": "i6", "tema": "Fechas invertidas", "category": "other", "propietario": "", "prioridad": "P1", "risk": "green", "status": "done", "estado_sheet": "En curso", "proyecto": "", "fecha_inicio": "2026-05-01T00:00:00Z", "fecha_fin": "2026-04-01T00:00:00Z" },
+    { "id": "i7", "tema": "Proyecto retenido", "category": "tools", "propietario": "", "prioridad": "", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "Proyecto Fantasma" },
+    { "id": "i8", "tema": "Proyecto duplicado", "category": "tools", "propietario": "", "prioridad": "", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "Dup A" },
+    { "id": "i9", "tema": "Prioridad rara", "category": "tools", "propietario": "", "prioridad": "P9", "risk": "green", "status": "pending", "estado_sheet": "No iniciado", "proyecto": "" },
+    { "id": "i10", "tema": "Subtareas raras", "category": "tools", "propietario": "", "prioridad": "", "risk": "green", "status": "backlog", "estado_sheet": "No iniciado", "proyecto": "", "subtareas": [{ "title": "sin id" }] }
+  ],
+  "hitos": [
+    { "id": "h1", "proyecto_id": "p1", "nombre": "Go Live", "fecha_prevista": "2026-06-30T00:00:00Z", "completado": false, "orden": 1 }
+  ],
+  "comentarios": [
+    { "id": "c1", "item_id": "i1", "texto": "hola", "ts": "1/1" }
+  ],
+  "campanas": []
+}
