@@ -31,6 +31,21 @@ class Q {
   neq(c, v) { this.f.push(r => r[c] !== v); return this }
   is(c, v) { this.f.push(r => (r[c] ?? null) === v); return this }
   order(c, { ascending = true } = {}) { (this.ord ||= []).push([c, ascending]); return this }
+  // SQL LIKE (case-insensitive): % = any run, _ = any char, backslash escapes the next char
+  ilike(c, pat) {
+    const lit = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    let re = ''
+    for (let i = 0; i < pat.length; i++) {
+      const ch = pat[i]
+      if (ch === '\\' && i + 1 < pat.length) re += lit(pat[++i])
+      else if (ch === '%') re += '.*'
+      else if (ch === '_') re += '.'
+      else re += lit(ch)
+    }
+    const rx = new RegExp('^' + re + '$', 'i')
+    this.f.push(r => r[c] != null && rx.test(r[c])); return this
+  }
+  limit(n) { this.lim = n; return this }
   single() { this.one = true; return this }
   then(res, rej) { return Promise.resolve(this.run()).then(res, rej) }
   run() {
@@ -56,6 +71,7 @@ class Q {
     }
     if (this.op === 'delete') { for (const r of m) rows.splice(rows.indexOf(r), 1); return { data: null, error: null } }
     if (this.ord) m = [...m].sort((a, b) => { for (const [c, asc] of this.ord) { const d = (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (asc ? 1 : -1); if (d) return d } return 0 })
+    if (this.lim) m = m.slice(0, this.lim)
     return { data: this.one ? m[0] : m.map(r => ({ ...r })), error: null }
   }
 }
@@ -173,5 +189,13 @@ rec('realtime: UPDATE/INSERT mapped to UI shape (ids, status, owner), DELETE tra
     got.length === 3 && got[0][0] === 'update' && got[0][1] === pmItems[3].id && got[0][2] === 'blocked' && got[1][0] === 'insert' && got[1][1] === 'rt00001' && got[1][3] === tables.people[0].name && got[2][0] === 'delete' && got[2][1] === pmItems[3].id, JSON.stringify(got))
 unsub()
 
+// ── 4. identification by e-mail (My Work) ──
+tables.people[0].email = 'juan.test@empresa.com'; tables.people[1].email = 'fran.test@empresa.com'
+const me1 = await api.findPersonByEmail('  Juan.Test@Empresa.COM ')
+rec('findPersonByEmail: case/space-insensitive match returns id, name, email', me1 && me1.name === tables.people[0].name && me1.email === 'juan.test@empresa.com' && me1.id === tables.people[0].id)
+rec('findPersonByEmail: unknown e-mail -> null', (await api.findPersonByEmail('nadie@empresa.com')) === null && (await api.findPersonByEmail('')) === null)
+rec('findPersonByEmail: wildcard characters are escaped (cannot enumerate people)', (await api.findPersonByEmail('%@%')) === null && (await api.findPersonByEmail('_uan.test@empresa.com')) === null && (await api.findPersonByEmail('%')) === null)
+tables.people[1].active = false
+rec('findPersonByEmail: inactive people cannot identify', (await api.findPersonByEmail('fran.test@empresa.com')) === null)
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)

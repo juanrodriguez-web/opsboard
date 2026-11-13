@@ -245,6 +245,14 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     return data?.[0] ? commentToApp(data[0], row.proyecto_id) : undefined
   }
 
+  // Identifies a person by e-mail (no password: this is identification, not authentication).
+  // Only the matching row is requested; wildcard characters typed by the user are escaped.
+  async function findPersonByEmail(email) {
+    const e = String(email || '').trim().toLowerCase()
+    if (!e) return null
+    const rows = unwrap(await client.from('people').select('id, name, email').eq('active', true).ilike('email', e.replace(/[\\%_]/g, m => '\\' + m)).limit(1))
+    return rows && rows[0] ? { id: rows[0].id, name: rows[0].name, email: rows[0].email } : null
+  }
   async function loadAll() {
     const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
     return { items, proyectos, campanas }
@@ -254,7 +262,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     loadAll, listItems, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
     listProyectos, updateProyecto, insertProyectoRows,
     listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
-    listCampanas, listPlanAccion,
+    listCampanas, listPlanAccion, findPersonByEmail,
     _test: { loadRefs, dateToUi },
   }
 }

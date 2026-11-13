@@ -3,4 +3,7 @@ import * as items from './items.js'
 import * as proyectos from './proyectos.js'
 import * as misc from './misc.js'
 
-export const legacyApi = { ...items, ...proyectos, ...misc }
+// Identification by e-mail only exists in the PM model (people.email).
+const findPersonByEmail = async () => null
+
+export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail }

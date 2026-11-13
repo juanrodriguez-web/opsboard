@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import {
   uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
-  listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion,
+  listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail,
 } from './lib/api/index.js'
+import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -48,8 +49,6 @@ const LOCAL_ITEMS_KEY  = 'obs-local-items'
 const OWN_COLORS = {
   'juan rodriguez peisel': '#2563eb',
   'francisco toledo':      '#7c3aed',
-  'nacho cruz':            '#d97706',
-  'maria garcia':          '#0891b2',
 }
 const ownerColor = name => OWN_COLORS[norm(name || '')] || '#64748b'
 
@@ -66,7 +65,7 @@ const priColor = p => PRI_COLORS[p] || { bg:C.surface, color:C.muted }
 const WIP_LIMITS = { pending:null, inprogress:null, blocked:null, done:null, backlog:null }
 
 const PRIORIDADES  = ['P0', 'P1', 'P2', 'P3']
-const KNOWN_OWNERS = ['Juan Rodriguez Peisel', 'Francisco Toledo', 'Nacho Cruz', 'Maria Garcia']
+const KNOWN_OWNERS = ['Juan Rodriguez Peisel', 'Francisco Toledo']
 
 const FASES = [
   { id:'RTM',             label:'RTM',              labelEN:'RTM',             pct:10  },
@@ -3830,6 +3829,103 @@ const IntakeModal = ({ onClose, onExecute, onToast }) => {
 }
 
 
+// ── MY WORK ─────────────────────────────────────────────────────────────────
+const MyWork = ({ items, me, onIdentify, onLogout, onOpenItem }) => {
+  const [email, setEmail] = useState('')
+  const [err, setErr]     = useState('')
+  const [busy, setBusy]   = useState(false)
+  const [showAll, setShowAll] = useState(false)
+
+  if (!me) {
+    const submit = async e => {
+      e.preventDefault(); setBusy(true); setErr('')
+      const msg = await onIdentify(email); setBusy(false)
+      if (msg) setErr(msg)
+    }
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', padding:20 }}>
+        <form onSubmit={submit} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'28px 28px 24px', width:'100%', maxWidth:380, boxShadow:'0 8px 30px rgba(0,0,0,.06)' }}>
+          <div style={{ fontSize:20, fontWeight:700, marginBottom:6 }}>My Work</div>
+          <div style={{ fontSize:13, color:C.muted, marginBottom:18, lineHeight:1.5 }}>Introduce tu correo para ver el trabajo que tienes asignado. Se recordará en este navegador.</div>
+          <input type="email" autoFocus required value={email} onChange={e => { setEmail(e.target.value); setErr('') }} placeholder="tu.correo@empresa.com"
+            style={{ width:'100%', padding:'10px 12px', border:`1px solid ${err ? '#e11d48' : C.border}`, borderRadius:8, fontSize:14, background:C.surface, color:C.text, outline:'none', boxSizing:'border-box' }} />
+          {err && <div style={{ color:'#e11d48', fontSize:12, marginTop:8 }}>{err}</div>}
+          <button type="submit" disabled={busy || !email.trim()} style={{ marginTop:14, width:'100%', padding:'10px 14px', background:C.accent, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:busy?'wait':'pointer', opacity:(busy || !email.trim()) ? .6 : 1 }}>
+            {busy ? 'Comprobando…' : 'Entrar'}
+          </button>
+        </form>
+      </div>
+    )
+  }
+
+  const g = classifyMyWork(items, me.name)
+  const first = (me.name || '').split(' ')[0]
+  const rel = due => { const d = daysBetween(g.today, due); return d === 0 ? 'hoy' : d < 0 ? `hace ${-d} d` : `en ${d} d` }
+
+  const Row = ({ it }) => {
+    const pc = priColor(it.prioridad)
+    const late = it._due && it._due < g.today
+    return (
+      <div onClick={() => onOpenItem(it)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderBottom:`1px solid ${C.border}`, cursor:'pointer', background:C.card }}>
+        <span style={{ width:26, flexShrink:0, textAlign:'center', fontSize:9, fontWeight:700, padding:'2px 0', borderRadius:3, background:pc.bg, color:pc.color }}>{it.prioridad || '—'}</span>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{it.tema}</div>
+          {it.proyecto && <div style={{ fontSize:11, color:C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{it.proyecto}</div>}
+        </div>
+        <Tag id={it.status} type="st" />
+        <div style={{ width:92, flexShrink:0, textAlign:'right', fontSize:11, color: late ? '#e11d48' : C.muted, fontWeight: late ? 700 : 400 }}>
+          {it._due ? <>{fmtFecha(it._due)}<div style={{ fontSize:10, opacity:.8 }}>{rel(it._due)}</div></> : '—'}
+        </div>
+      </div>
+    )
+  }
+
+  const Section = ({ title, color, list }) => list.length === 0 ? null : (
+    <div style={{ marginBottom:18 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, margin:'0 0 8px' }}>
+        <span style={{ width:4, height:16, borderRadius:2, background:color }} />
+        <span style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em', color:C.text }}>{title}</span>
+        <span style={{ fontSize:11, color:C.muted }}>{list.length}</span>
+      </div>
+      <div style={{ border:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden' }}>{list.map(it => <Row key={it.id} it={it} />)}</div>
+    </div>
+  )
+
+  const kpis = [
+    { l:'Vencidos', v:g.overdue.length, c:'#e11d48' }, { l:'Hoy', v:g.dueToday.length, c:'#d97706' }, { l:'Próx. 7 días', v:g.upcoming.length, c:'#2563eb' },
+    { l:'Bloqueados', v:g.blocked.length, c:'#e11d48' }, { l:'Sin fecha', v:g.noDate.length, c:C.muted }, { l:'Asignados', v:g.all.length, c:C.text },
+  ]
+  return (
+    <div style={{ height:'100%', overflowY:'auto', padding:'20px 24px', background:C.bg }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+        <div style={{ width:36, height:36, borderRadius:'50%', background:ownerColor(me.name), color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:13 }}>{iniciales(me.name)}</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:18, fontWeight:700 }}>Hola, {first}</div>
+          <div style={{ fontSize:12, color:C.muted }}>{me.email}</div>
+        </div>
+        <button onClick={onLogout} style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'5px 10px', fontSize:11, cursor:'pointer' }}>Cambiar usuario</button>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:10, marginBottom:20 }}>
+        {kpis.map(k => <div key={k.l} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 12px' }}>
+          <div style={{ fontSize:22, fontWeight:700, color:k.c }}>{k.v}</div><div style={{ fontSize:10, color:C.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em' }}>{k.l}</div></div>)}
+      </div>
+      {g.all.length === 0 && <div style={{ textAlign:'center', color:C.muted, padding:'40px 0' }}>No tienes trabajo activo asignado a tu nombre.</div>}
+      <Section title="Vencidos" color="#e11d48" list={g.overdue} />
+      <Section title="Hoy" color="#d97706" list={g.dueToday} />
+      <Section title="Próximos 7 días" color="#2563eb" list={g.upcoming} />
+      <Section title="Bloqueados" color="#be123c" list={g.blocked} />
+      <Section title="Sin fecha" color="#94a3b8" list={g.noDate} />
+      {g.all.length > 0 && (
+        <div>
+          <button onClick={() => setShowAll(v => !v)} style={{ background:'none', border:'none', color:C.muted, fontSize:12, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>
+            {showAll ? '▼' : '▶'} Todo lo asignado ({g.all.length})
+          </button>
+          {showAll && <Section title="Todo lo asignado" color={C.text} list={g.all} />}
+        </div>
+      )}
+    </div>
+  )
+}
 // ── PLAN DE ACCIÓN ─────────────────────────────────────────────────────────
 const PlanAccion = () => {
     const [planData, setPlanData] = useState([])
@@ -3900,6 +3996,22 @@ export default function OpsBoard() {
   const [error,       setError]      = useState(null)
   const [lastUpd,     setLastUpd]    = useState(null)
   const [itemActivo,  setItemActivo] = useState(null)
+  // Identificación por correo (no es autenticación: no hay contraseña). Se recuerda en este navegador.
+  const [me, setMe] = useState(() => lsGet('opsboard-me', null))
+  const identify = async email => {
+    const clean = cleanEmail(email)
+    if (!clean) return 'Introduce un correo válido'
+    let p = null
+    try { p = await findPersonByEmail(clean) } catch (e) { return 'No se pudo comprobar el correo: ' + (e.message || e) }
+    if (!p) return 'Ese correo no está registrado en OpsBoard'
+    lsSet('opsboard-me', { email: p.email, name: p.name }); setMe({ email: p.email, name: p.name })
+    return null
+  }
+  const logoutMe = () => { try { localStorage.removeItem('opsboard-me') } catch {}; setMe(null) }
+  useEffect(() => {   // si la persona ya no existe o cambió de nombre, se actualiza o se cierra la sesión
+    if (!me?.email) return
+    findPersonByEmail(me.email).then(p => { if (!p) logoutMe(); else if (p.name !== me.name) { lsSet('opsboard-me', { email: p.email, name: p.name }); setMe({ email: p.email, name: p.name }) } }).catch(() => {})
+  }, [])
   const [showNuevo,   setShowNuevo]  = useState(false)
   const [catF,        setCatF]       = useState('all')
   const [asF,         setAsF]        = useState('all')
@@ -3994,10 +4106,11 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','Tablero','🗂️ Proyectos','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','🧑 My Work','Tablero','🗂️ Proyectos','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
+    '🧑 My Work':         'My Work',
     'Tablero':            'Tablero de Temas',
     '🗂️ Proyectos':      'Proyectos',
     '📋 Plan de Acción':  'Plan de Acción 26/27',
@@ -4010,6 +4123,7 @@ export default function OpsBoard() {
   // Nav icon map for sidebar
   const NAV_ICONS = {
     'Dashboard':          '◈',
+    '🧑 My Work':         '☺',
     'Tablero':            '⊞',
     '🗂️ Proyectos':      '◫',
     '📋 Plan de Acción':  '◐',
@@ -4222,6 +4336,7 @@ export default function OpsBoard() {
               )}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
+              {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}
               {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
