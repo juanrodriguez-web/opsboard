@@ -89,7 +89,7 @@ export function workToHito(w, refs) {
   const legacy = w.legacy || {}
   const done = refs.statusKeyById.get(w.status_id) === 'done'
   return { id: w.legacy_id ?? w.id, proyecto_id: refs.projectById.get(w.project_id)?.legacy_id ?? w.project_id, nombre: w.title,
-           descripcion: w.description || '', fecha_prevista: w.due_date ? dateToUi(w.due_date).toISOString() : null,
+           descripcion: w.description || '', fecha_prevista: w.due_date || null,   // 'YYYY-MM-DD': what fmtFecha() / <input type=date> expect
            completado: done, orden: Number(legacy.orden ?? 0), created_at: w.created_at }
 }
 

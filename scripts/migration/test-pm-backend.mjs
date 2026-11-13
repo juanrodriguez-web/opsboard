@@ -152,7 +152,7 @@ rec('updateProyecto(nombre, descripcion, fechas, status=blocked): columns, healt
 const hito = await api.addHito({ id: 'hit0001', proyecto_id: projLegacy, nombre: 'Go live', fecha_prevista: '2026-12-01', orden: 0 })
 await api.updateHito('hit0001', { completado: true })
 const hitos = await api.listHitos(projLegacy)
-rec('hitos: add / list / toggle completed (milestone work item, due_date, status done)', hito.id === 'hit0001' && hitos.length === 1 && hitos[0].completado === true && hitos[0].nombre === 'Go live' && !!hitos[0].fecha_prevista)
+rec('hitos: add / list / toggle completed (milestone work item, due_date, status done)', hito.id === 'hit0001' && hitos.length === 1 && hitos[0].completado === true && hitos[0].nombre === 'Go live' && hitos[0].fecha_prevista === '2026-12-01' && !Number.isNaN(new Date(hitos[0].fecha_prevista + 'T12:00').getTime()))
 rec('hitos are not returned as items', !(await api.listItems()).some(i => i.tema === 'Go live'))
 await api.deleteHito('hit0001'); rec('deleteHito', (await api.listHitos(projLegacy)).length === 0)
 const com = await api.addProyectoComment({ id: 'com0001', proyecto_id: projLegacy, item_id: null, texto: 'Hola', ts: 'x' })

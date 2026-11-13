@@ -3971,14 +3971,14 @@ export default function OpsBoard() {
 
   const onUnifyTema = (temaViejoId, temaDestId, tituloFinal, notasFinal) => {
     // Actualizar tema destino
-    setAllItems(prev => prev.map(i => {
+    setItems(prev => prev.map(i => {
       if (i.id === temaDestId) {
         return { ...i, tema: tituloFinal, notas: notasFinal, _hasLocal: true }
       }
       return i
     }))
     // Eliminar tema viejo
-    setAllItems(prev => prev.filter(i => i.id !== temaViejoId))
+    setItems(prev => prev.filter(i => i.id !== temaViejoId))
     // Guardar en Supabase
     mergeItems({ keepId: temaDestId, removeId: temaViejoId, tema: tituloFinal, notas: notasFinal }).catch(e => console.error('[onUnifyTema]', e))
   }
@@ -4225,7 +4225,7 @@ export default function OpsBoard() {
               {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
-              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang} onDeleteItem={async (id) => { await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
+              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang.toUpperCase()} onDeleteItem={async (id) => { await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
           )}
