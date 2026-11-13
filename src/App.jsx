@@ -4225,7 +4225,11 @@ export default function OpsBoard() {
               {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
-              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang.toUpperCase()} onDeleteItem={async (id) => { await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id)) }} />}
+              {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang.toUpperCase()} onDeleteItem={async (id) => {
+                const it = items.find(i => i.id === id)
+                if (!window.confirm(`¿Borrar el tema "${it?.tema || id}"? Esta acción no se puede deshacer.`)) return
+                await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id))
+              }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
           )}
