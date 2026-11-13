@@ -1,5 +1,5 @@
-import { supabase } from '../supabase.js'
-import { unwrap } from './util.js'
+import { supabase } from '../../supabase.js'
+import { unwrap } from '../util.js'
 import { dbToItem, itemToDb, itemPatchToDb } from './mappers.js'
 
 export async function listItems() {

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase.js'
+import { supabase } from '../../supabase.js'
 
 // Campaigns: a failure is non-fatal (table may be empty), matching the previous behaviour.
 export async function listCampanas() {

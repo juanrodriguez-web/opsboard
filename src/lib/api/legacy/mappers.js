@@ -1,4 +1,4 @@
-import { mapSt } from '../../parser.js'
+import { mapSt } from '../../../parser.js'
 
 // DB (snake_case) <-> app (camelCase) mapping for the legacy tables `items` and `proyectos`.
 export function dbToItem(row) {
