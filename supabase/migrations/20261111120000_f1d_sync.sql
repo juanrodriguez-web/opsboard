@@ -250,7 +250,7 @@ begin
          f1d_ts(p.start_date) as fecha_inicio, f1d_ts(p.target_date) as fecha_fin,
          p.fase, p.capex, p.desarrollo, p.notes as notas
   from projects p;
-  insert into _rplan select 20, 'proyectos', 'insert', null, jsonb_build_object('name', name) from _rp where legacy_id is null;
+  insert into _rplan select 20, 'proyectos', 'insert', coalesce(r.legacy_id, ''), jsonb_build_object('name', r.name) from _rp r where r.legacy_id is null or not exists (select 1 from proyectos l where l.id = r.legacy_id);
   insert into _rplan select 21, 'proyectos', 'update', r.legacy_id,
          jsonb_strip_nulls(jsonb_build_object(
            'nombre', case when l.nombre is distinct from r.name then r.name end,
@@ -310,7 +310,7 @@ begin
          w.legacy_subtareas as subtareas, w.legacy ->> 'estado_sheet' as estado_sheet_prev
   from work_items w join statuses s on s.id = w.status_id
   where w.type <> 'milestone';
-  insert into _rplan select 30, 'items', 'insert', null, jsonb_build_object('tema', tema) from _ri where legacy_id is null;
+  insert into _rplan select 30, 'items', 'insert', coalesce(r.legacy_id, ''), jsonb_build_object('tema', r.tema) from _ri r where r.legacy_id is null or not exists (select 1 from items l where l.id = r.legacy_id);
   insert into _rplan select 31, 'items', 'update', r.legacy_id, jsonb_build_object('changed', (select jsonb_agg(c) from unnest(array[
            case when l.tema is distinct from r.tema then 'tema' end,
            case when coalesce(l.objetivo, '') is distinct from r.objetivo then 'objetivo' end,
@@ -364,9 +364,9 @@ begin
   end if;
 
   -- ── milestones <-> hitos, project comments <-> comentarios (insert / update / delete) ──
-  insert into _rplan select 40, 'hitos', 'insert', null, jsonb_build_object('title', w.title) from work_items w where w.type = 'milestone' and w.legacy_id is null;
+  insert into _rplan select 40, 'hitos', 'insert', coalesce(w.legacy_id, ''), jsonb_build_object('title', w.title) from work_items w where w.type = 'milestone' and (w.legacy_id is null or not exists (select 1 from hitos h where h.id = w.legacy_id));
   insert into _rplan select 42, 'hitos', 'delete', h.id, null from hitos h where not exists (select 1 from work_items w where w.legacy_source = 'hitos' and w.legacy_id = h.id);
-  insert into _rplan select 50, 'comentarios', 'insert', null, null from comments c where c.project_id is not null and c.legacy_ref is null;
+  insert into _rplan select 50, 'comentarios', 'insert', coalesce(substr(c.legacy_ref, 13), ''), null from comments c where c.project_id is not null and (c.legacy_ref is null or not exists (select 1 from comentarios x where 'comentarios:' || x.id = c.legacy_ref));
   insert into _rplan select 52, 'comentarios', 'delete', x.id, null from comentarios x where x.item_id is null and not exists (select 1 from comments c where c.legacy_ref = 'comentarios:' || x.id);
   if p_apply then
     update work_items w set legacy_source = 'hitos', legacy_id = f1d_newid() where w.type = 'milestone' and w.legacy_id is null;

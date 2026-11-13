@@ -1,0 +1,17 @@
+-- C4 · 90 ROLLBACK. Úsalo SOLO si hay que volver a legacy. Orden:
+--   A) En Vercel: VITE_DATA_BACKEND=legacy (o borrar la variable) y redesplegar producción.
+--   B) Ejecutar este script en el SQL Editor.
+-- 1) Qué se llevará de pm a legacy (lo editado desde el cutover):
+select * from f1d_reverse(false);
+-- 2) Aplicar pm -> legacy (descomenta y ejecuta cuando el paso 1 sea el esperado):
+-- select * from f1d_reverse(true);
+-- 3) Reabrir la escritura en legacy:
+-- begin;
+-- do $$ declare t text; begin
+--   foreach t in array array['items', 'proyectos', 'hitos', 'comentarios'] loop
+--     execute format('drop policy if exists legacy_read_only on %I', t);
+--     execute format('create policy public_all on %I for all using (true) with check (true)', t);
+--   end loop;
+-- end $$;
+-- commit;
+-- Límite: lo que solo existe en el modelo nuevo (relaciones, checklists, nuevos tipos) no vuelve a legacy.
