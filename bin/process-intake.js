@@ -4,6 +4,7 @@
  * Process Intake Script
  * Lee archivos de la carpeta de entrada (eml, pdf, md, xlsx)
  * Analiza con Claude y actualiza automáticamente items/proyectos en Supabase
+ * (modelo nuevo work_items/projects desde el cutover; DATA_BACKEND=legacy solo tras un rollback)
  * Soporta confirmación manual para matches dudosos
  */
 
@@ -49,6 +50,46 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+// Backend de datos: 'pm' (work_items/projects, por defecto desde el cutover) o 'legacy' (items/proyectos).
+// Con legacy en solo lectura, 'legacy' solo sirve tras un rollback (VITE_DATA_BACKEND=legacy / DATA_BACKEND=legacy).
+const BACKEND = (process.env.DATA_BACKEND || process.env.VITE_DATA_BACKEND || 'pm') === 'legacy' ? 'legacy' : 'pm'
+const VALID_STATUS = ['pending', 'inprogress', 'blocked', 'done', 'backlog']
+const ESTADO_SHEET = { pending: 'No iniciado', inprogress: 'Según lo planificado', blocked: 'En peligro', done: 'Hecho', backlog: 'No iniciado' }
+
+let pmApi = null
+const getPmApi = async () => {
+  if (!pmApi) {
+    const { pathToFileURL } = require('url')
+    const { createPmApi } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'lib', 'api', 'pm', 'index.js')).href)
+    pmApi = createPmApi(supabase)
+  }
+  return pmApi
+}
+
+// Devuelve { items, proyectos } con los campos que usa este script (id, tema, proyecto, status, notas / id, nombre, status).
+const loadData = async () => {
+  if (BACKEND === 'pm') {
+    const api = await getPmApi()
+    const [items, proyectos] = await Promise.all([api.listItems(), api.listProyectos()])
+    return { items, proyectos }
+  }
+  const { data: items } = await supabase.from('items').select('*')
+  const { data: proyectos } = await supabase.from('proyectos').select('*')
+  return { items: items || [], proyectos: proyectos || [] }
+}
+
+// fields: { status, fechaFin, notas, estadoSheet } (camelCase, como la app)
+const saveItemFields = async (id, fields) => {
+  if (BACKEND === 'pm') return (await getPmApi()).updateItem(id, fields)
+  const db = {}
+  if (fields.status !== undefined) db.status = fields.status
+  if (fields.estadoSheet !== undefined) db.estado_sheet = fields.estadoSheet
+  if (fields.fechaFin !== undefined) db.fecha_fin = fields.fechaFin
+  if (fields.notas !== undefined) db.notas = fields.notas
+  const { error } = await supabase.from('items').update(db).eq('id', id)
+  if (error) throw new Error(error.message)
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILIDADES
@@ -299,7 +340,7 @@ Estructura:
 // ACTUALIZAR SUPABASE
 // ─────────────────────────────────────────────────────────────────────────────
 
-const applyUpdates = async (analysis, fileName) => {
+const applyUpdates = async (analysis, fileName, items = []) => {
   if (!analysis.updates || analysis.updates.length === 0) {
     log(`Sin actualizaciones para: ${fileName}`)
     return { success: 0, pending: 0, errors: 0 }
@@ -315,32 +356,31 @@ const applyUpdates = async (analysis, fileName) => {
       if (!match) continue
 
       if (match.type === 'item') {
-        const updates = {}
-        if (update.field === 'status') updates.status = update.value
-        if (update.field === 'fecha_fin') updates.fecha_fin = update.value
+        const fields = {}
+        if (update.field === 'status') {
+          if (!VALID_STATUS.includes(update.value)) {
+            log(`Estado no válido "${update.value}" para ${match.name}: se omite el cambio de estado`, 'warn')
+          } else {
+            fields.status = update.value
+            fields.estadoSheet = ESTADO_SHEET[update.value]
+          }
+        }
+        if (update.field === 'fecha_fin') fields.fechaFin = update.value
 
-        // Agregar comentario
-        const { data: item } = await supabase
-          .from('items')
-          .select('id, notas')
-          .eq('id', match.id)
-          .single()
-
+        // Agregar comentario a las notas (el item ya está cargado)
+        const item = items.find((i) => i.id === match.id)
         if (item) {
           const newNota = `[${new Date().toLocaleDateString('es-ES')}] ${analysis.extractedComment || update.reason}`
-          updates.notas = item.notas ? `${item.notas}\n${newNota}` : newNota
+          fields.notas = item.notas ? `${item.notas}\n${newNota}` : newNota
 
-          const { error } = await supabase
-            .from('items')
-            .update(updates)
-            .eq('id', match.id)
-
-          if (error) {
-            log(`Error actualizando item ${match.name}: ${error.message}`, 'error')
-            errors++
-          } else {
+          try {
+            await saveItemFields(match.id, fields)
+            item.notas = fields.notas
             log(`✓ Item actualizado: ${match.name}`, 'success')
             success++
+          } catch (error) {
+            log(`Error actualizando item ${match.name}: ${error.message}`, 'error')
+            errors++
           }
         }
       } else if (match.type === 'proyecto') {
@@ -356,7 +396,6 @@ const applyUpdates = async (analysis, fileName) => {
 
   return { success, pending, errors }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PROCESAR ARCHIVOS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -376,8 +415,8 @@ const processFiles = async () => {
   log(`📂 Encontrados ${files.length} archivos`)
 
   // Cargar datos existentes
-  const { data: items } = await supabase.from('items').select('*')
-  const { data: proyectos } = await supabase.from('proyectos').select('*')
+  const { items, proyectos } = await loadData()
+  log(`Backend de datos: ${BACKEND}`)
 
   for (const file of files) {
     const filePath = path.join(INTAKE_FOLDER, file)
@@ -391,7 +430,7 @@ const processFiles = async () => {
     }
 
     // Analizar con Claude
-    const analysis = await analyzeWithClaude(content, items || [], proyectos || [])
+    const analysis = await analyzeWithClaude(content, items, proyectos)
     if (!analysis) {
       log(`Error analizando ${file}`, 'error')
       appendLog({ file, status: 'error', reason: 'Claude API error' })
@@ -399,7 +438,7 @@ const processFiles = async () => {
     }
 
     // Aplicar actualizaciones
-    const result = await applyUpdates(analysis, file)
+    const result = await applyUpdates(analysis, file, items)
 
     // Registrar en log
     appendLog({
@@ -427,11 +466,15 @@ const processFiles = async () => {
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 
-processFiles()
-  .catch((err) => {
-    log(`Error fatal: ${err.message}`, 'error')
-    process.exit(1)
-  })
-  .then(() => {
-    process.exit(0)
-  })
+if (require.main === module) {
+  processFiles()
+    .catch((err) => {
+      log(`Error fatal: ${err.message}`, 'error')
+      process.exit(1)
+    })
+    .then(() => {
+      process.exit(0)
+    })
+}
+
+module.exports = { applyUpdates, loadData, saveItemFields, BACKEND, _setPmApi: (api) => { pmApi = api } }
