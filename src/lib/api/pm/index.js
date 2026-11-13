@@ -253,6 +253,25 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     const rows = unwrap(await client.from('people').select('id, name, email').eq('active', true).ilike('email', e.replace(/[\\%_]/g, m => '\\' + m)).limit(1))
     return rows && rows[0] ? { id: rows[0].id, name: rows[0].name, email: rows[0].email } : null
   }
+  // ── saved views (table saved_views; see supabase/migrations/20261113120000_saved_views.sql) ──
+  // Own views plus the ones shared with the team/workspace.
+  async function listSavedViews(ownerId) {
+    const mine = ownerId ? unwrap(await client.from('saved_views').select('*').eq('owner_id', ownerId).order('name', { ascending: true }), 'saved_views') || [] : []
+    const shared = unwrap(await client.from('saved_views').select('*').neq('visibility', 'private').order('name', { ascending: true }), 'saved_views') || []
+    const seen = new Set(mine.map(v => v.id))
+    return [...mine, ...shared.filter(v => !seen.has(v.id))]
+  }
+  async function saveSavedView({ id, name, config, visibility = 'private', ownerId, viewType = 'list' }) {
+    if (!String(name || '').trim()) throw new Error('La vista necesita un nombre')
+    const row = { name: String(name).trim(), config: config || {}, visibility, owner_id: ownerId, view_type: viewType }
+    if (id) {
+      const data = unwrap(await client.from('saved_views').update(row).eq('id', id).select('*'))
+      return data && data[0]
+    }
+    const data = unwrap(await client.from('saved_views').insert(row).select('*'))
+    return data && data[0]
+  }
+  async function deleteSavedView(id) { unwrap(await client.from('saved_views').delete().eq('id', id)) }
   async function loadAll() {
     const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
     return { items, proyectos, campanas }
@@ -263,6 +282,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     listProyectos, updateProyecto, insertProyectoRows,
     listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
     listCampanas, listPlanAccion, findPersonByEmail,
+    listSavedViews, saveSavedView, deleteSavedView,
     _test: { loadRefs, dateToUi },
   }
 }

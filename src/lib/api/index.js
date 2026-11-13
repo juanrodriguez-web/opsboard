@@ -21,5 +21,5 @@ export const {
   insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows,
   listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
-  listPlanAccion, listCampanas, findPersonByEmail,
+  listPlanAccion, listCampanas, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
 } = api

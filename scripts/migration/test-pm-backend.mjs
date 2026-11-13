@@ -16,7 +16,7 @@ for (const t of ['items', 'proyectos', 'hitos', 'comentarios', 'campanas'])
 for (const f of readdirSync('supabase/migrations').sort()) await pg.exec(readFileSync(join('supabase/migrations', f), 'utf8'))
 await pg.exec(readFileSync('scripts/migration/remote/B_migrar_datos_f1b.sql', 'utf8'))
 const dump = async t => (await pg.query(`select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) j from ${t} x`)).rows[0].j
-const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [] }
+const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [] }
 
 // ── fake supabase-js (just the builder surface the backend uses) ──
 const norm = s => (s ?? '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -197,5 +197,21 @@ rec('findPersonByEmail: unknown e-mail -> null', (await api.findPersonByEmail('n
 rec('findPersonByEmail: wildcard characters are escaped (cannot enumerate people)', (await api.findPersonByEmail('%@%')) === null && (await api.findPersonByEmail('_uan.test@empresa.com')) === null && (await api.findPersonByEmail('%')) === null)
 tables.people[1].active = false
 rec('findPersonByEmail: inactive people cannot identify', (await api.findPersonByEmail('fran.test@empresa.com')) === null)
+
+// ── 5. saved views ──
+const juanId = tables.people[0].id, franId = tables.people[1].id
+const v1 = await api.saveSavedView({ name: '  Mis urgentes ', config: { filters: [{ field: 'prioridad', op: 'in', value: ['P0'] }] }, visibility: 'private', ownerId: juanId })
+const v2 = await api.saveSavedView({ name: 'Equipo: bloqueados', config: { groupBy: 'status' }, visibility: 'team', ownerId: franId })
+const v3 = await api.saveSavedView({ name: 'Privada de Fran', config: {}, visibility: 'private', ownerId: franId })
+const asJuan = await api.listSavedViews(juanId), asFran = await api.listSavedViews(franId)
+rec('saved views: create trims the name and stores config/owner/visibility', v1.name === 'Mis urgentes' && v1.owner_id === juanId && v1.visibility === 'private' && v1.config.filters[0].field === 'prioridad' && v1.view_type === 'list')
+rec('saved views: a user sees own views + team-shared, never other people\'s private ones',
+    asJuan.map(v => v.name).sort().join('|') === 'Equipo: bloqueados|Mis urgentes' && asFran.map(v => v.name).sort().join('|') === 'Equipo: bloqueados|Privada de Fran')
+rec('saved views: own + shared are not duplicated', new Set(asFran.map(v => v.id)).size === asFran.length)
+const v1b = await api.saveSavedView({ id: v1.id, name: 'Mis urgentes', config: { groupBy: 'proyecto' }, visibility: 'team', ownerId: juanId })
+rec('saved views: update changes config and visibility in place', v1b.id === v1.id && tables.saved_views.length === 3 && v1b.config.groupBy === 'proyecto' && (await api.listSavedViews(franId)).some(v => v.id === v1.id))
+await api.deleteSavedView(v3.id)
+rec('saved views: delete', tables.saved_views.length === 2 && !tables.saved_views.some(v => v.id === v3.id))
+rec('saved views: a nameless view is rejected', await (async () => { try { await api.saveSavedView({ name: '   ', ownerId: juanId }); return false } catch { return true } })())
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)

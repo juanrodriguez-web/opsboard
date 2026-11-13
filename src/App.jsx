@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import {
   uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
-  listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail,
+  listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
+import ListaView from './views/ListaView.jsx'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -4004,13 +4005,13 @@ export default function OpsBoard() {
     let p = null
     try { p = await findPersonByEmail(clean) } catch (e) { return 'No se pudo comprobar el correo: ' + (e.message || e) }
     if (!p) return 'Ese correo no está registrado en OpsBoard'
-    lsSet('opsboard-me', { email: p.email, name: p.name }); setMe({ email: p.email, name: p.name })
+    lsSet('opsboard-me', { id: p.id, email: p.email, name: p.name }); setMe({ id: p.id, email: p.email, name: p.name })
     return null
   }
   const logoutMe = () => { try { localStorage.removeItem('opsboard-me') } catch {}; setMe(null) }
   useEffect(() => {   // si la persona ya no existe o cambió de nombre, se actualiza o se cierra la sesión
     if (!me?.email) return
-    findPersonByEmail(me.email).then(p => { if (!p) logoutMe(); else if (p.name !== me.name) { lsSet('opsboard-me', { email: p.email, name: p.name }); setMe({ email: p.email, name: p.name }) } }).catch(() => {})
+    findPersonByEmail(me.email).then(p => { if (!p) logoutMe(); else if (p.name !== me.name || p.id !== me.id) { lsSet('opsboard-me', { id: p.id, email: p.email, name: p.name }); setMe({ id: p.id, email: p.email, name: p.name }) } }).catch(() => {})
   }, [])
   const [showNuevo,   setShowNuevo]  = useState(false)
   const [catF,        setCatF]       = useState('all')
@@ -4106,12 +4107,13 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','🧑 My Work','Tablero','🗂️ Proyectos','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','🧑 My Work','Tablero','☰ Lista','🗂️ Proyectos','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
     '🧑 My Work':         'My Work',
     'Tablero':            'Tablero de Temas',
+    '☰ Lista':            'Lista',
     '🗂️ Proyectos':      'Proyectos',
     '📋 Plan de Acción':  'Plan de Acción 26/27',
     '📋 Reporte Semanal': 'Reporte Semanal Ejecutivo',
@@ -4125,6 +4127,7 @@ export default function OpsBoard() {
     'Dashboard':          '◈',
     '🧑 My Work':         '☺',
     'Tablero':            '⊞',
+    '☰ Lista':            '≣',
     '🗂️ Proyectos':      '◫',
     '📋 Plan de Acción':  '◐',
     '📋 Reporte Semanal': '≡',
@@ -4337,6 +4340,7 @@ export default function OpsBoard() {
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}
+              {vista === '☰ Lista'            && <ListaView items={allItems} me={me} owners={KNOWN_OWNERS} projectNames={proyectos.map(p => p.nombre)} onItemChange={onItemChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, priColor, fmtFecha }} api={{ listSavedViews, saveSavedView, deleteSavedView }} />}
               {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}

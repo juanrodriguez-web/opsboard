@@ -5,5 +5,8 @@ import * as misc from './misc.js'
 
 // Identification by e-mail only exists in the PM model (people.email).
 const findPersonByEmail = async () => null
+const listSavedViews = async () => { throw new Error('Saved views need the PM backend') }
+const saveSavedView = listSavedViews
+const deleteSavedView = listSavedViews
 
-export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail }
+export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView }
