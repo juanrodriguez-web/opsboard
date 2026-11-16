@@ -365,5 +365,31 @@ rec('projects never updated keep health not_set and empty text', (await api.list
   rec('invalid target state rejected', await expectErr(() => api.decideMailCandidate(c2.id, { to: 'deleted' }), /no válido/))
   rec('listMailCandidates() without filter returns everything', (await api.listMailCandidates()).length === 3)
 }
+// ── 13. topic comments (DB instead of the browser) ──
+{
+  const expectErr = async (fn, re) => { try { await fn(); return false } catch (e) { return re.test(e.message) } }
+  const its = await api.listItems()
+  const a = its[0], b = its[1]
+  const authorId = tables.people[0].id
+  const c1 = await api.addItemComment(a.id, '  Primer comentario  ', authorId)
+  await new Promise(r => setTimeout(r, 5))   // distinct timestamps, as in the real DB
+  const c2 = await api.addItemComment(a.id, 'Segundo')
+  await api.addItemComment(b.id, 'Del otro tema')
+  const la = await api.listItemComments(a.id)
+  rec('addItemComment + listItemComments: trimmed text, author name, only that topic, newest first', c1.text === 'Primer comentario' && c1.author === tables.people[0].name && la.length === 2 && la[0].text === 'Segundo' && !la.some(x => x.text === 'Del otro tema'), JSON.stringify(la.map(x => x.text)))
+  rec('empty comment rejected', await expectErr(() => api.addItemComment(a.id, '   '), /vacío/))
+  rec('comment on an unknown topic rejected', await expectErr(() => api.addItemComment('no-existe', 'x'), /./))
+  const before = tables.comments.length
+  const imp = await api.importItemComments([
+    { itemId: a.id, text: 'Viejo 1', iso: '2026-10-01T10:00:00Z', ref: 'obs-comments:x1' },
+    { itemId: b.id, text: 'Viejo 2', iso: '2026-10-02T10:00:00Z', ref: 'obs-comments:x2' },
+    { itemId: 'ya-no-existe', text: 'Huérfano', iso: '2026-10-03T10:00:00Z', ref: 'obs-comments:x3' },
+  ])
+  rec('importItemComments: inserts the matching ones, counts the failed one', imp.inserted === 2 && imp.failed === 1 && imp.skipped === 0 && tables.comments.length === before + 2, JSON.stringify(imp))
+  const imp2 = await api.importItemComments([{ itemId: a.id, text: 'Viejo 1', iso: '2026-10-01T10:00:00Z', ref: 'obs-comments:x1' }])
+  rec('importing the same legacy_ref again is skipped (idempotent) and keeps the original date', imp2.inserted === 0 && imp2.skipped === 1 && tables.comments.find(c => c.legacy_ref === 'obs-comments:x1').created_at === '2026-10-01T10:00:00Z')
+  rec('imported comments show up in the topic, ordered by their original date', (await api.listItemComments(a.id)).map(x => x.text).join('|') === 'Segundo|Primer comentario|Viejo 1')
+}
+
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)

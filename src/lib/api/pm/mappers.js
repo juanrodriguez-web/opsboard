@@ -111,6 +111,12 @@ export function workToHito(w, refs) {
            completado: done, orden: Number(legacy.orden ?? 0), created_at: w.created_at }
 }
 
+// Topic comment -> the shape the modal renders ({ id, text, ts, iso, author }).
+export function itemCommentToApp(c, refs) {
+  return { id: c.id, text: c.body, ts: new Date(c.created_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+           iso: c.created_at, author: (c.author_id && refs?.personNameById?.get(c.author_id)) || '' }
+}
+
 export function commentToApp(c, projectLegacyId) {
   return { id: c.legacy_ref ? c.legacy_ref.replace(/^comentarios:/, '') : c.id, proyecto_id: projectLegacyId, item_id: null, texto: c.body,
            ts: new Date(c.created_at).toLocaleString('es-ES'), created_at: c.created_at }

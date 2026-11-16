@@ -152,7 +152,7 @@ Los SQL para el editor de Supabase están en `scripts/migration/remote/` (A–D)
 - [ ] **Proyectos duplicados** sin resolver (se mantienen separados): GAMIFICACIÓN / Gamificación y comunidad; Mejora comunicación CDV / BPMOC217 - Mejora comunicación CDV Prepago; Evolución/Mejoras e-SIM Prepago / MEJORA WEB ESIM PREPAGO
 - [ ] **Retirada de legacy** tras una semana de observación (backup final antes)
 - [ ] **Sin probar en producción:** editar proyectos, hitos y comentarios de proyecto; tiempo real con dos pestañas
-- [ ] **Comentarios de tema (modal) siguen en localStorage** (`obs-comments`, por navegador y clave = título): hay que pasarlos a la tabla `comments` del modelo PM
+- [x] **Comentarios de tema** en la tabla `comments` (`work_item_id`, autor si hay identificación); al abrir la app se pasan una vez los `obs-comments` del navegador (copia en `obs-comments-backup`, dedupe por `legacy_ref`)
 - [ ] **Cancelado** no existe en la UI (el adaptador lo mapea a `done`); los cancelados no tienen `completed_at`
 - [ ] Dato sospechoso: la fecha de fin de BPMOC264 es 05/06/**2024**
 - [ ] Fuera de alcance por ahora: Auth/permisos, vistas nuevas (Board, My Work, Portfolio), Workload
@@ -180,6 +180,6 @@ git push origin main # Vercel auto-deploya desde main
 - **Fechas**: la UI formatea con `toISOString().slice(0,10)`; un `Date` a medianoche de Madrid se vería un día antes. Por eso el adaptador entrega mediodía local.
 - **Backlog**: los items con `status:'backlog'` salen del kanban y van a la sección colapsable; ⊟ los mueve al backlog y "Activar" los devuelve a un estado.
 - **Traducción**: el Reporte usa claves `ES`/`EN` en mayúsculas; el menú lateral no se traduce.
-- **localStorage del navegador**: ya no se usan `obs-proy-overrides`, `obs-proj-comments` ni `obs-done-ts-*` (código retirado). Queda `obs-comments` (comentarios del modal de tema, solo en ese navegador) y preferencias de vista (`obs-dash-*`, `opsboard-me`). Se perdió deliberadamente cualquier dato que solo existiera ahí.
+- **localStorage del navegador**: ya no se usan `obs-proy-overrides`, `obs-proj-comments` ni `obs-done-ts-*` (código retirado). Los comentarios de tema ya viven en la BD (`obs-comments` solo se lee para migrar lo que quedara en un navegador). Quedan preferencias de vista (`obs-dash-*`, `opsboard-me`). Se perdió deliberadamente cualquier dato que solo existiera ahí.
 - **Backlog Mail automático**: skill `.claude/skills/backlog-mail/SKILL.md` + `scripts/mail-ingest.mjs` (`context` / `insert`, dedupe por mensaje y asunto, números de cliente enmascarados). Tareas programadas `backlog-mail-0830`, `backlog-mail-midday` (10, 13, 15 h) y `backlog-mail-1730`, lun-vie, solo con la app de Claude abierta.
 - **App.jsx monolítico**: si crece mucho más, partir en componentes.

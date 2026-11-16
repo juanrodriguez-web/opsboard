@@ -20,5 +20,8 @@ const listMailCandidates = async () => []
 const insertMailCandidates = async () => { throw new Error('Backlog Mail necesita el backend PM') }
 const decideMailCandidate = insertMailCandidates
 const listPeople = async () => []
+const listItemComments = async () => []
+const addItemComment = async () => { throw new Error('Los comentarios necesitan el backend PM') }
+const importItemComments = async () => ({ inserted: 0, skipped: 0, failed: 0 })
 const updatePersonCapacity = async () => { throw new Error('La capacidad necesita el backend PM') }
-export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation, getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity, listMailCandidates, insertMailCandidates, decideMailCandidate }
+export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation, getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity, listMailCandidates, insertMailCandidates, decideMailCandidate, listItemComments, addItemComment, importItemComments }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
-  listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
+  listProyectoComments, addProyectoComment as apiAddProyectoComment, listItemComments, addItemComment, importItemComments, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   addRelation as apiAddRelation, removeRelation as apiRemoveRelation,
   getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity, listMailCandidates, decideMailCandidate,
   BACKEND,
@@ -119,14 +119,23 @@ const saveOverride     = (k, fields)     => { const ov = getOverrides(); ov[k] =
 const doneMs           = item           => (item.completedAt ? new Date(item.completedAt).getTime() : 0)
 // Archived = done for more than 7 days (completed_at from the DB); done items without a date (old data) go straight to Histórico
 const isArchived       = item           => item.status === 'done' && (!doneMs(item) || (Date.now() - doneMs(item)) > 7 * 86400000)
-const getComments  = k           => (lsGet(COMMENTS_KEY, []) || []).filter(c => c.k === k)
-const saveComment  = (k, text)   => {
+// One-time move of the topic comments that only lived in this browser (obs-comments, keyed by title) into the DB.
+// Imported ones leave the browser (a backup copy is kept); the ones that match no topic stay. Safe to run again: the import dedupes by legacy_ref.
+const migrateLocalComments = async items => {
+  if (BACKEND !== 'pm') return null
   const all = lsGet(COMMENTS_KEY, []) || []
-  const now = new Date()
-  const ts  = `${pad(now.getDate())}/${pad(now.getMonth()+1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`
-  const item = { k, ts, text, id:uid(), iso:now.toISOString() }
-  lsSet(COMMENTS_KEY, [item, ...all].slice(0, 300))
-  return item
+  if (!all.length) return null
+  const byTitle = new Map()
+  items.forEach(i => { const k = norm(i.tema); if (!byTitle.has(k)) byTitle.set(k, i.id) })
+  const rows = [], keep = []
+  for (const c of all) {
+    const itemId = byTitle.get(c.k)
+    if (itemId && c.text) rows.push({ itemId, text: c.text, iso: c.iso, ref: 'obs-comments:' + c.id }); else keep.push(c)
+  }
+  if (!rows.length) return null
+  const r = await importItemComments(rows)
+  if (r.failed === 0) { lsSet(COMMENTS_KEY + '-backup', all); lsSet(COMMENTS_KEY, keep) }
+  return { ...r, unmatched: keep.length }
 }
 // Fire-and-forget email notification when a task is assigned to Juan or Fran
 async function notifyAssignment({ tema, propietario, descripcion = '', categoria = '', prioridad = '' }) {
@@ -3193,11 +3202,17 @@ const DepsSection = ({ item, relations, allItems, onAdd, onRemove }) => {
 }
 
 // ── ModalItem ─────────────────────────────────────────────────────────────────
-const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation, onCheckProgress, onDelete }) => {
+const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation, onCheckProgress, onDelete, me }) => {
   const [item,    setItem]    = useState(itemOrig)
   const [editing, setEditing] = useState(false)
   const [nc,      setNc]      = useState('')
-  const [comments, setComments] = useState(() => getComments(norm(itemOrig.tema)))
+  const [comments, setComments] = useState([])
+  const [commentsErr, setCommentsErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    listItemComments(itemOrig.id).then(l => { if (alive) setComments(l) }).catch(e => { if (alive) setCommentsErr('No se pudieron cargar los comentarios: ' + (e.message || e)) })
+    return () => { alive = false }
+  }, [itemOrig.id])
 
   // Edit state
   const [eTema,  setETema]  = useState(itemOrig.tema || '')
@@ -3261,12 +3276,15 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
     }
   }
 
-  const agregarComentario = () => {
+  const agregarComentario = async () => {
     const text = nc.trim()
     if (!text) return
-    const c = saveComment(norm(item.tema), text)
-    setComments(prev => [c, ...prev])
-    setNc('')
+    setCommentsErr('')
+    try {
+      const c = await addItemComment(item.id, text, me?.id)
+      if (c) setComments(prev => [c, ...prev])
+      setNc('')
+    } catch (e) { setCommentsErr('No se pudo guardar el comentario: ' + (e.message || e)) }
   }
 
   const cat     = CATS.find(c => c.id === item.category)
@@ -3489,11 +3507,12 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                     borderRadius:6, padding:'7px 10px', fontSize:12, outline:'none' }} />
                 <Btn v="sec" onClick={agregarComentario} style={{ padding:'7px 12px', fontSize:12 }}>Enviar</Btn>
               </div>
+              {commentsErr && <div role="alert" style={{ color:'#f43f5e', fontSize:11, marginBottom:8 }}>{commentsErr}</div>}
               {comments.map(c => (
                 <div key={c.id} style={{ background:C.card, border:`1px solid ${C.border}`,
                   borderRadius:8, padding:'8px 12px', marginBottom:6 }}>
-                  <div style={{ fontSize:10, color:C.muted, marginBottom:3 }}>{c.ts}</div>
-                  <div style={{ fontSize:12, color:C.text, lineHeight:1.6 }}>{c.text}</div>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:3 }}>{c.author ? c.author + ' · ' : ''}{c.ts}</div>
+                  <div style={{ fontSize:12, color:C.text, lineHeight:1.6, whiteSpace:'pre-wrap' }}>{c.text}</div>
                 </div>
               ))}
             </div>
@@ -3872,6 +3891,7 @@ export default function OpsBoard() {
       listChecklistProgress().then(setCheckProgress).catch(() => {})
       listMailCandidates('pending').then(l => setMailPending(l.length)).catch(() => {})
       setItems(fetched)
+      migrateLocalComments(fetched).then(r => { if (r && r.inserted) setToast('✓ ' + r.inserted + ' comentario(s) de este navegador pasados a la base de datos') }).catch(() => {})
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
       setLastUpd(new Date())
@@ -4210,7 +4230,7 @@ export default function OpsBoard() {
           proyectoNames={proyectos.map(p => p.nombre)} />
       )}
       {itemActivo && (
-        <ModalItem item={itemActivo} onClose={() => setItemActivo(null)}
+        <ModalItem item={itemActivo} me={me} onClose={() => setItemActivo(null)}
           onItemChange={(id, fields, keepOpen = false) => {
             onItemChange(id, fields)
             if (keepOpen) setItemActivo(prev => prev && prev.id===id ? { ...prev, ...fields } : prev)

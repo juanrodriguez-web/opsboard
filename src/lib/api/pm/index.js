@@ -3,7 +3,7 @@
 import { unwrap } from '../util.js'
 import {
   normName, isUuid, statusKeyFromLegacy, prioToPm, projectStatusFromLegacy, dateFromUi, dateToUi,
-  workToItem, projectToApp, workToHito, commentToApp, itemPatchToWork, estadoSheetFor, statusLegacyFromKey,
+  workToItem, projectToApp, workToHito, commentToApp, itemCommentToApp, itemPatchToWork, estadoSheetFor, statusLegacyFromKey,
 } from './mappers.js'
 import { wouldCreateCycle } from '../../deps.js'
 import { validateIncoming as validateMail } from '../../mail.js'
@@ -315,6 +315,41 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     return data?.[0] ? commentToApp(data[0], row.proyecto_id) : undefined
   }
 
+  // ── topic comments (replace the browser-only obs-comments) ─────
+  async function listItemComments(itemId) {
+    const it = await resolveItem(itemId)
+    const r = await loadRefs()
+    const rows = unwrap(await client.from('comments').select('*').eq('work_item_id', it.pmId).order('created_at', { ascending: false })) || []
+    return rows.map(c => itemCommentToApp(c, r))
+  }
+
+  async function addItemComment(itemId, text, authorId = null) {
+    const body = String(text ?? '').trim()
+    if (!body) throw new Error('El comentario está vacío')
+    const it = await resolveItem(itemId)
+    const row = { work_item_id: it.pmId, body }
+    if (authorId && isUuid(authorId)) row.author_id = authorId
+    const data = unwrap(await client.from('comments').insert(row).select('*'))
+    return data?.[0] ? itemCommentToApp(data[0], await loadRefs()) : undefined
+  }
+
+  // One-time import of the comments that only lived in a browser. rows: [{ itemId, text, iso, ref }]; what was already imported
+  // (same legacy_ref) is skipped, so running it twice is harmless. Returns { inserted, skipped, failed }.
+  async function importItemComments(rows) {
+    if (!rows.length) return { inserted: 0, skipped: 0, failed: 0 }
+    const seen = new Set((unwrap(await client.from('comments').select('legacy_ref').in('legacy_ref', rows.map(r => r.ref))) || []).map(c => c.legacy_ref))
+    let inserted = 0, skipped = 0, failed = 0
+    for (const r of rows) {
+      if (seen.has(r.ref)) { skipped++; continue }
+      try {
+        const it = await resolveItem(r.itemId)
+        unwrap(await client.from('comments').insert({ work_item_id: it.pmId, body: String(r.text ?? '').slice(0, 5000), legacy_ref: r.ref, created_at: r.iso || new Date().toISOString() }))
+        seen.add(r.ref); inserted++
+      } catch { failed++ }
+    }
+    return { inserted, skipped, failed }
+  }
+
   // Identifies a person by e-mail (no password: this is identification, not authentication).
   // Only the matching row is requested; wildcard characters typed by the user are escaped.
   async function findPersonByEmail(email) {
@@ -463,7 +498,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
   return {
     loadAll, listItems, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
     listProyectos, updateProyecto, insertProyectoRows,
-    listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
+    listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment, listItemComments, addItemComment, importItemComments,
     listCampanas, listPlanAccion, findPersonByEmail,
     listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation,
     listPeople, updatePersonCapacity, listMailCandidates, insertMailCandidates, decideMailCandidate,
