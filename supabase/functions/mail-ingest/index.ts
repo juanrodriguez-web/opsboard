@@ -4,7 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-const TOKEN = Deno.env.get('INGEST_TOKEN') ?? ''
+const TOKEN = (Deno.env.get('INGEST_TOKEN') ?? '').trim()
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } })
 const same = (a: string, b: string) => { if (a.length !== b.length || !a) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0 }
@@ -14,7 +14,7 @@ const cleanEmail = (s: unknown) => { const m = String(s ?? '').trim().toLowerCas
 
 Deno.serve(async req => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
-  if (!same(req.headers.get('x-ingest-token') ?? '', TOKEN)) return json({ error: 'unauthorized' }, 401)
+  if (!same((req.headers.get('x-ingest-token') ?? '').trim(), TOKEN)) return json({ error: 'unauthorized' }, 401)
   let body: any
   try { body = await req.json() } catch { return json({ error: 'bad json' }, 400) }
 

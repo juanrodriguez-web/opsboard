@@ -6,13 +6,20 @@
 // Env, DIRECT mode (only while the database is still open): SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY); SUPABASE_URL optional.
 // PRIVACY: candidates carry only subject, sender, a short summary (max 600 chars) and a link. Never bodies or attachments.
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { createPmApi } from '../src/lib/api/pm/index.js'
 
 const require = createRequire(import.meta.url)
 const { createClient } = require('@supabase/supabase-js')
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://qmgmvtjnbarqonrfmpix.supabase.co'
 const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+// The endpoint settings can live outside the repo, in ~/.claude/opsboard-ingest.json ({ INGEST_URL, INGEST_TOKEN }), so no secret is ever in a prompt or in git.
+const cfgFile = process.env.OPSBOARD_INGEST_FILE || join(homedir(), '.claude', 'opsboard-ingest.json')
+if (!(process.env.INGEST_URL && process.env.INGEST_TOKEN) && existsSync(cfgFile)) {
+  try { const c = JSON.parse(readFileSync(cfgFile, 'utf8')); process.env.INGEST_URL ||= c.INGEST_URL; process.env.INGEST_TOKEN ||= c.INGEST_TOKEN } catch { /* unreadable file: fall through to direct mode */ }
+}
 const ENDPOINT = process.env.INGEST_URL && process.env.INGEST_TOKEN
 if (!ENDPOINT && !key) { console.error('Falta INGEST_URL + INGEST_TOKEN (modo endpoint) o SUPABASE_ANON_KEY (modo directo).'); process.exit(2) }
 const api = ENDPOINT ? null : createPmApi(createClient(url, key), { listCampanas: async () => [], listPlanAccion: async () => [] })
