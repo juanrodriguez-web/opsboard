@@ -3,9 +3,11 @@ import {
   uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
   listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
+  BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
 import ListaView from './views/ListaView.jsx'
+import PortfolioView from './views/PortfolioView.jsx'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -4079,6 +4081,18 @@ export default function OpsBoard() {
     const ov = getProyOverrides()[norm(p.nombre)] || {}
     return Object.keys(ov).length > 0 ? { ...p, ...ov, _hasLocalProy:true } : p
   })
+  // Cambios desde Portfolio / Project Overview: se refleja al instante y se revierte si falla el guardado.
+  const asDate = s => (s ? new Date(`${s}T12:00:00`) : null)
+  const onProjectChange = async (id, fields) => {
+    const before = proyectos.find(p => p.id === id)
+    const local = { ...fields }
+    if ('fecha_inicio' in fields) local.fechaInicio = asDate(fields.fecha_inicio)
+    if ('fecha_fin' in fields) local.fechaFin = asDate(fields.fecha_fin)
+    if ('latestUpdate' in fields) local.latestUpdateAt = new Date().toISOString()
+    setProyectos(prev => prev.map(p => (p.id === id ? { ...p, ...local } : p)))
+    try { await updateProyecto(id, fields) }
+    catch (e) { setProyectos(prev => prev.map(p => (p.id === id ? before : p))); throw e }
+  }
   const onProyUpdate = (nombre, fields) =>
     setProyectos(prev => prev.map(p => norm(p.nombre)===norm(nombre) ? {...p,...fields,_hasLocalProy:true} : p))
 
@@ -4107,7 +4121,7 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','🧑 My Work','Tablero','☰ Lista','🗂️ Proyectos','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','🧑 My Work','Tablero','☰ Lista','🗂️ Proyectos','📊 Portfolio','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
@@ -4115,6 +4129,7 @@ export default function OpsBoard() {
     'Tablero':            'Tablero de Temas',
     '☰ Lista':            'Lista',
     '🗂️ Proyectos':      'Proyectos',
+    '📊 Portfolio':      'Portfolio',
     '📋 Plan de Acción':  'Plan de Acción 26/27',
     '📋 Reporte Semanal': 'Reporte Semanal Ejecutivo',
     '📅 Campañas CVM':   'Campañas CVM',
@@ -4129,6 +4144,7 @@ export default function OpsBoard() {
     'Tablero':            '⊞',
     '☰ Lista':            '≣',
     '🗂️ Proyectos':      '◫',
+    '📊 Portfolio':      '◧',
     '📋 Plan de Acción':  '◐',
     '📋 Reporte Semanal': '≡',
     '📅 Campañas CVM':   '◷',
@@ -4337,6 +4353,7 @@ export default function OpsBoard() {
                   owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
                   onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} />
               )}
+              {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}

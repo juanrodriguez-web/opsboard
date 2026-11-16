@@ -82,7 +82,9 @@ export function projectToApp(p, refs) {
     created_at: p.created_at,
     updated_at: p.updated_at,
   }
-  return { ...row, fechaInicio: dateToUi(p.start_date), fechaFin: dateToUi(p.target_date), nombreEN: row.nombre_en }
+  return { ...row, fechaInicio: dateToUi(p.start_date), fechaFin: dateToUi(p.target_date), nombreEN: row.nombre_en,
+    // PM-only fields (Portfolio / Project Overview)
+    health: p.health || 'not_set', pmStatus: p.status, latestUpdate: p.latest_update || '', latestUpdateAt: p.latest_update_at || null, objectives: p.objectives || '' }
 }
 
 export function workToHito(w, refs) {

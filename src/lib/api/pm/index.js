@@ -161,14 +161,19 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
   async function projectPatch(fields) {
     const p = {}
     for (const [k, col] of Object.entries(PROJECT_COLS)) if (fields[k] !== undefined) p[col] = fields[k] === '' && k === 'nombre_en' ? null : fields[k]
+    if (fields.health !== undefined) {
+      if (!['on_track', 'at_risk', 'off_track', 'not_set'].includes(fields.health)) throw new Error('Salud no válida: ' + fields.health)
+      p.health = fields.health
+    }
+    if (fields.objectives !== undefined) p.objectives = fields.objectives
+    if (fields.latestUpdate !== undefined) { p.latest_update = fields.latestUpdate; p.latest_update_at = new Date().toISOString() }
     if (fields.fecha_inicio !== undefined) p.start_date = dateFromUi(fields.fecha_inicio)
     if (fields.fecha_fin !== undefined) p.target_date = dateFromUi(fields.fecha_fin)
     if (fields.prioridad !== undefined) p.priority = prioToPm(fields.prioridad)
     if (fields.propietario !== undefined) p.owner_id = await ensurePerson(fields.propietario)
     if (fields.status !== undefined) {
       p.legacy_status = fields.status
-      p.status = projectStatusFromLegacy(fields.status)
-      p.health = fields.status === 'blocked' ? 'at_risk' : 'not_set'
+      p.status = projectStatusFromLegacy(fields.status)   // health is manual and independent of status
     }
     return p
   }
