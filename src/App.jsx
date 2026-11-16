@@ -4,6 +4,7 @@ import {
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
   listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   addRelation as apiAddRelation, removeRelation as apiRemoveRelation,
+  getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,
   BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
@@ -225,7 +226,7 @@ const Toast = ({ msg, type = 'success', onHide }) => {
 }
 
 // ── Tarjeta ──────────────────────────────────────────────────────────────────
-const Tarjeta = ({ item, onClick, onNextSt, onUnify, isBlockedByDep = false }) => {
+const Tarjeta = ({ item, onClick, onNextSt, onUnify, isBlockedByDep = false, checkProg = null }) => {
   const cat       = CATS.find(c => c.id === item.category)
   const nextIdx   = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
   const nextId    = ST[nextIdx].id
@@ -278,6 +279,9 @@ const Tarjeta = ({ item, onClick, onNextSt, onUnify, isBlockedByDep = false }) =
           {cat?.label || 'Sin categoría'}
         </span>
         <span style={{ flex:1 }} />
+        {checkProg && checkProg.total > 0 && (
+          <span title="Checklist" style={{ fontFamily:"'Geist Mono',monospace", fontSize:9, color: checkProg.done === checkProg.total ? '#059669' : '#a8a39a', border:'1px solid #e8e5df', borderRadius:4, padding:'1px 4px' }}>☑ {checkProg.done}/{checkProg.total}</span>
+        )}
         {isBlockedByDep && (
           <span title="Depende de un tema sin completar" style={{ fontSize:10, fontWeight:600, color:'#b45309', background:'#fef3c7', borderRadius:4, padding:'1px 5px' }}>🔒 bloqueado</span>
         )}
@@ -393,7 +397,7 @@ const TableroKPIStrip = ({ items }) => {
 }
 
 // ── Tablero ──────────────────────────────────────────────────────────────────
-const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo, onUnifyTema, blockedIds }) => {
+const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo, onUnifyTema, blockedIds, checkProgress }) => {
   const [unifyModal, setUnifyModal] = useState(null)
   const [search,      setSearch]      = useState('')
   const [priF,        setPriF]        = useState('all')
@@ -551,7 +555,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
                 <div style={{ minHeight:60 }}>
                   {col.length === 0
                     ? <div style={{ border:`2px dashed ${C.border}`, borderRadius:8, padding:'18px 12px', textAlign:'center', color:C.muted, fontSize:11 }}>Vacío</div>
-                    : col.map(item => <Tarjeta key={item.id} item={item} onClick={setItem} onNextSt={onNextSt} onUnify={setUnifyModal} isBlockedByDep={!!blockedIds?.has(item.id)} />)}
+                    : col.map(item => <Tarjeta key={item.id} item={item} onClick={setItem} onNextSt={onNextSt} onUnify={setUnifyModal} isBlockedByDep={!!blockedIds?.has(item.id)} checkProg={checkProgress?.[item.id]} />)}
                 </div>
               </div>
             )
@@ -3390,6 +3394,73 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
   )
 }
 
+// ── ChecklistSection: lista de comprobación simple del tema ──
+const ChecklistSection = ({ itemId, onProgress }) => {
+  const [list, setList] = useState(null)      // null = cargando
+  const [text, setText] = useState('')
+  const [err, setErr]   = useState('')
+  const [editId, setEditId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const report = l => onProgress?.({ done: l.filter(x => x.done).length, total: l.length })
+  useEffect(() => {
+    let live = true
+    getChecklist(itemId).then(c => { if (live) setList(c.items) }).catch(e => { if (live) { setList([]); setErr(e.message || String(e)) } })
+    return () => { live = false }
+  }, [itemId])
+  const run = async (fn, next) => {   // aplica el cambio local y revierte si falla el guardado
+    const before = list
+    setErr(''); if (next) { setList(next); report(next) }
+    try { await fn() } catch (e) { setList(before); report(before); setErr(e.message || String(e)) }
+  }
+  const add = async () => {
+    const t = text.trim(); if (!t) return
+    setErr('')
+    try { const it = await addChecklistItem(itemId, t); const next = [...(list || []), it]; setList(next); report(next); setText('') }
+    catch (e) { setErr(e.message || String(e)) }
+  }
+  const items = list || []
+  const done = items.filter(x => x.done).length
+  return (
+    <div style={{ marginBottom:14 }}>
+      <Lbl>Checklist {list && items.length > 0 ? `(${done}/${items.length})` : ''}</Lbl>
+      {list && items.length > 0 && (
+        <div style={{ height:4, background:C.border, borderRadius:2, marginBottom:6, overflow:'hidden' }}>
+          <div style={{ width:`${Math.round(done / items.length * 100)}%`, height:'100%', background:'#10b981' }} />
+        </div>
+      )}
+      <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:6 }}>
+        {items.map(it => (
+          <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px 10px' }}>
+            <button onClick={() => run(() => updateChecklistItem(it.id, { done: !it.done }), items.map(x => x.id === it.id ? { ...x, done: !x.done } : x))}
+              style={{ width:16, height:16, borderRadius:4, border:`2px solid ${it.done ? '#10b981' : C.border}`, background: it.done ? '#10b981' : 'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>
+              {it.done && <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>✓</span>}
+            </button>
+            {editId === it.id ? (
+              <input autoFocus value={editText} onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { const t = editText.trim(); setEditId(null); if (t && t !== it.text) run(() => updateChecklistItem(it.id, { text: t }), items.map(x => x.id === it.id ? { ...x, text: t } : x)) } else if (e.key === 'Escape') { e.stopPropagation(); setEditId(null) } }}
+                onBlur={() => setEditId(null)}
+                style={{ flex:1, background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'3px 6px', fontSize:12, outline:'none' }} />
+            ) : (
+              <span onDoubleClick={() => { setEditId(it.id); setEditText(it.text) }} title="Doble clic para editar"
+                style={{ fontSize:12, flex:1, color: it.done ? C.muted : C.text, textDecoration: it.done ? 'line-through' : 'none' }}>{it.text}</span>
+            )}
+            <button onClick={() => run(() => deleteChecklistItem(it.id), items.filter(x => x.id !== it.id))} title="Quitar"
+              style={{ background:'none', border:'none', color:'#fca5a5', cursor:'pointer', fontSize:14, lineHeight:1, padding:'0 2px', flexShrink:0 }}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:'flex', gap:6 }}>
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }}
+          placeholder={list === null ? 'Cargando…' : 'Nuevo elemento… (Enter para añadir)'} disabled={list === null}
+          style={{ flex:1, background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 10px', fontSize:12, outline:'none' }} />
+        <button onClick={add} disabled={!text.trim()}
+          style={{ padding:'6px 12px', borderRadius:6, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor: text.trim() ? 'pointer' : 'default', fontWeight:600 }}>+ Añadir</button>
+      </div>
+      {err && <div style={{ fontSize:11, color:'#dc2626', marginTop:4 }}>{err}</div>}
+    </div>
+  )
+}
+
 // ── DepsSection: dependencias del tema (bloqueado por / bloquea a / relacionado) ──
 const DepsSection = ({ item, relations, allItems, onAdd, onRemove }) => {
   const [kind, setKind] = useState('blockedBy')       // 'blockedBy' | 'blocks' | 'related'
@@ -3448,7 +3519,7 @@ const DepsSection = ({ item, relations, allItems, onAdd, onRemove }) => {
 }
 
 // ── ModalItem ─────────────────────────────────────────────────────────────────
-const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation }) => {
+const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation, onCheckProgress }) => {
   const [item,    setItem]    = useState(itemOrig)
   const [editing, setEditing] = useState(false)
   const [nc,      setNc]      = useState('')
@@ -3715,6 +3786,9 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                   style={{ padding:'6px 12px', borderRadius:6, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:'pointer', fontWeight:600 }}>+ Add</button>
               </div>
             </div>
+
+            {/* Checklist */}
+            {onCheckProgress && <ChecklistSection itemId={item.id} onProgress={pr => onCheckProgress(item.id, pr)} />}
 
             {/* Dependencias */}
             {onAddRelation && <DepsSection item={item} relations={relations} allItems={allItems} onAdd={onAddRelation} onRemove={onRemoveRelation} />}
@@ -4059,6 +4133,7 @@ export default function OpsBoard() {
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
   const [relations,   setRelations]  = useState([])
+  const [checkProgress, setCheckProgress] = useState({})
   const [proyectos,   setProyectos]  = useState([])
   const realtimeSub = useRef(null)
   const [loading,     setLoading]    = useState(true)
@@ -4097,6 +4172,7 @@ export default function OpsBoard() {
     try {
       const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys, relations: fetchedRels = [] } = await loadAll()
       setRelations(fetchedRels)
+      listChecklistProgress().then(setCheckProgress).catch(() => {})
       setItems(fetched)
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
@@ -4442,7 +4518,7 @@ export default function OpsBoard() {
               {vista === 'Tablero' && (
                 <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
                   owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
-                  onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} blockedIds={blockedIds} />
+                  onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} blockedIds={blockedIds} checkProgress={checkProgress} />
               )}
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
@@ -4478,6 +4554,7 @@ export default function OpsBoard() {
           }}
           proyectoNames={proyectos.map(p => p.nombre)}
           relations={relations} allItems={allItems} onAddRelation={addRelation} onRemoveRelation={removeRelation}
+          onCheckProgress={(id, pr) => setCheckProgress(prev => ({ ...prev, [id]: pr }))}
           onToast={msg => setToast(msg)} />
       )}
       {showIntake && (

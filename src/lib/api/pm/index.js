@@ -364,6 +364,52 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
 
   async function removeRelation(id) { unwrap(await client.from('work_item_relations').delete().eq('id', id)) }
 
+  // ── checklists (work_item_checklists + checklist_items) ────────
+  // One checklist per item (created on first use). UI shape: { id, items: [{ id, text, done }] }.
+  const toCheckItem = r => ({ id: r.id, text: r.text, done: !!r.done })
+  async function ensureChecklist(appId, create) {
+    const { pmId } = await resolveItem(appId)
+    const lists = unwrap(await client.from('work_item_checklists').select('*').eq('work_item_id', pmId).order('position', { ascending: true })) || []
+    if (lists.length) return lists[0]
+    if (!create) return null
+    const { data, error } = await client.from('work_item_checklists').insert({ work_item_id: pmId, title: 'Checklist', position: 0 }).select('*').single()
+    if (error) throw new Error('checklist: ' + error.message)
+    return data
+  }
+  async function getChecklist(appId) {
+    const cl = await ensureChecklist(appId, false)
+    if (!cl) return { id: null, items: [] }
+    const rows = unwrap(await client.from('checklist_items').select('*').eq('checklist_id', cl.id).order('position', { ascending: true })) || []
+    return { id: cl.id, items: rows.map(toCheckItem) }
+  }
+  async function addChecklistItem(appId, text) {
+    const clean = String(text || '').trim()
+    if (!clean) throw new Error('El elemento necesita un texto')
+    const cl = await ensureChecklist(appId, true)
+    const last = unwrap(await client.from('checklist_items').select('position').eq('checklist_id', cl.id).order('position', { ascending: false }).limit(1)) || []
+    const { data, error } = await client.from('checklist_items').insert({ checklist_id: cl.id, text: clean, position: last.length ? last[0].position + 1 : 0 }).select('*').single()
+    if (error) throw new Error('checklist: ' + error.message)
+    return toCheckItem(data)
+  }
+  async function updateChecklistItem(id, fields) {
+    const patch = {}
+    if (fields.text !== undefined) { const t = String(fields.text).trim(); if (!t) throw new Error('El elemento necesita un texto'); patch.text = t }
+    if (fields.done !== undefined) { patch.done = !!fields.done; patch.done_at = fields.done ? new Date().toISOString() : null }
+    if (!Object.keys(patch).length) return
+    unwrap(await client.from('checklist_items').update(patch).eq('id', id))
+  }
+  async function deleteChecklistItem(id) { unwrap(await client.from('checklist_items').delete().eq('id', id)) }
+  // { [appId]: { done, total } } for items that have a checklist (for the progress badge on cards)
+  async function listChecklistProgress() {
+    const lists = unwrap(await client.from('work_item_checklists').select('id, work_item_id')) || []
+    if (!lists.length) return {}
+    const rows = unwrap(await client.from('checklist_items').select('checklist_id, done')) || []
+    const itemOf = new Map(lists.map(l => [l.id, pmToApp.get(l.work_item_id)]))
+    const out = {}
+    for (const r of rows) { const app = itemOf.get(r.checklist_id); if (!app) continue; const p = out[app] || (out[app] = { done: 0, total: 0 }); p.total++; if (r.done) p.done++ }
+    return out
+  }
+
   async function loadAll() {
     const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
     const relations = await listRelations().catch(() => [])      // after listItems so app ids are known
@@ -376,6 +422,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
     listCampanas, listPlanAccion, findPersonByEmail,
     listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation,
+    getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,
     _test: { loadRefs, dateToUi },
   }
 }

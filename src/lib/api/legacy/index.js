@@ -12,4 +12,8 @@ const deleteSavedView = listSavedViews
 const listRelations = async () => []
 const addRelation = async () => { throw new Error('Las dependencias necesitan el backend PM') }
 const removeRelation = addRelation
-export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation }
+const getChecklist = async () => ({ id: null, items: [] })
+const addChecklistItem = async () => { throw new Error('Las checklists necesitan el backend PM') }
+const updateChecklistItem = addChecklistItem, deleteChecklistItem = addChecklistItem
+const listChecklistProgress = async () => ({})
+export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation, getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress }

@@ -17,7 +17,7 @@ for (const f of readdirSync('supabase/migrations').sort()) await pg.exec(readFil
 await pg.exec(readFileSync('scripts/migration/remote/B_migrar_datos_f1b.sql', 'utf8'))
 await pg.exec('select * from f1e_explode_subtasks(true)')            // subtasks are child rows, as after the explode migration
 const dump = async t => (await pg.query(`select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) j from ${t} x`)).rows[0].j
-const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [], work_item_relations: [] }
+const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [], work_item_relations: [], work_item_checklists: [], checklist_items: [] }
 
 // ── fake supabase-js (just the builder surface the backend uses) ──
 const norm = s => (s ?? '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -299,6 +299,26 @@ rec('projects never updated keep health not_set and empty text', (await api.list
   await api.removeRelation(r1.id)
   rec('removeRelation', !tables.work_item_relations.some(r => r.id === r1.id) && (await api.listRelations()).length === 3)
   rec('loadAll also returns relations', Array.isArray((await api.loadAll()).relations))
+}
+// ── 10. checklists ──
+{
+  const [a, b] = (await api.listItems()).slice(0, 2).map(i => i.id)
+  const expectErr = async (fn, re) => { try { await fn(); return false } catch (e) { return re.test(e.message) } }
+  rec('getChecklist on an item without checklist: empty, nothing created', (await api.getChecklist(a)).items.length === 0 && tables.work_item_checklists.length === 0)
+  const i1 = await api.addChecklistItem(a, '  Primero  '), i2 = await api.addChecklistItem(a, 'Segundo'), i3 = await api.addChecklistItem(a, 'Tercero')
+  rec('first add creates ONE checklist; items trimmed, ordered, not done', tables.work_item_checklists.length === 1 && i1.text === 'Primero' && i1.done === false && (await api.getChecklist(a)).items.map(x => x.text).join() === 'Primero,Segundo,Tercero')
+  rec('empty text rejected', await expectErr(() => api.addChecklistItem(a, '   '), /texto/) && await expectErr(() => api.updateChecklistItem(i1.id, { text: ' ' }), /texto/))
+  await api.updateChecklistItem(i2.id, { done: true })
+  const row2 = tables.checklist_items.find(r => r.id === i2.id)
+  rec('toggle done stores done and done_at; untoggle clears done_at', row2.done === true && !!row2.done_at && (await api.updateChecklistItem(i2.id, { done: false }), tables.checklist_items.find(r => r.id === i2.id).done_at === null))
+  await api.updateChecklistItem(i3.id, { text: 'Tercero editado', done: true })
+  rec('edit text', (await api.getChecklist(a)).items.find(x => x.id === i3.id).text === 'Tercero editado')
+  await api.addChecklistItem(b, 'Otro tema')
+  const prog = await api.listChecklistProgress()
+  rec('progress per item: done/total, other items independent', prog[a].done === 1 && prog[a].total === 3 && prog[b].done === 0 && prog[b].total === 1 && !(Object.keys(prog).length > 2))
+  await api.deleteChecklistItem(i1.id)
+  rec('delete item', (await api.getChecklist(a)).items.length === 2 && tables.checklist_items.some(r => r.id === i2.id))
+  rec('item without checklist is absent from progress', !(await api.listChecklistProgress())['nope'])
 }
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)
