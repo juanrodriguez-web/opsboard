@@ -9,6 +9,8 @@ import {
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
 import { AUTH_REQUIRED, signOut, changePassword } from './lib/auth.js'
+import { amIAdmin } from './lib/adminApi.js'
+import AdminView from './views/AdminView.jsx'
 import { blockersOf, blockedBy, relatedTo, blockedIdSet, candidatesFor, completionWarning } from './lib/deps.js'
 import ListaView from './views/ListaView.jsx'
 import PortfolioView from './views/PortfolioView.jsx'
@@ -3889,6 +3891,8 @@ export default function OpsBoard() {
   const [asF,         setAsF]        = useState('all')
   const [modo,        setModo]       = useState('kanban')
   const [toast,       setToast]      = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)          // the server decides; this only shows the tab
+  useEffect(() => { if (AUTH_REQUIRED) amIAdmin().then(setIsAdmin) }, [])
   const [pwOpen, setPwOpen] = useState(false)
   const [pwNew, setPwNew] = useState('')
   const [pwMsg, setPwMsg] = useState(null)               // { ok, text }
@@ -4034,7 +4038,7 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','🧑 My Work','Tablero','✉️ Backlog Mail','☰ Lista','🗂️ Proyectos','📊 Portfolio','👥 Workload','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','🧑 My Work','Tablero','✉️ Backlog Mail','☰ Lista','🗂️ Proyectos','📊 Portfolio','👥 Workload','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico', ...(isAdmin ? ['🔐 Administración'] : [])]
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
@@ -4050,6 +4054,7 @@ export default function OpsBoard() {
     '📅 Campañas CVM':   'Campañas CVM',
     '✨ IA Intake':       'IA Intake',
     '⧆ Histórico':       'Histórico',
+    '🔐 Administración': 'Administración',
   }
 
   // Nav icon map for sidebar
@@ -4067,6 +4072,7 @@ export default function OpsBoard() {
     '📅 Campañas CVM':   '◷',
     '✨ IA Intake':       '✦',
     '⧆ Histórico':       '⊙',
+    '🔐 Administración': '⚙',
   }
 
   return (
@@ -4246,6 +4252,7 @@ export default function OpsBoard() {
                 await deleteTopic(id)
               }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
+              {vista === '🔐 Administración'  && isAdmin && <AdminView ui={{ C }} />}
             </>
           )}
         </div>

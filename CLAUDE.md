@@ -68,6 +68,8 @@ En Vercel (Settings → Environment Variables):
 | `VITE_SUPABASE_ANON_KEY` | Anon key pública de Supabase (Production y Preview) |
 | `VITE_DATA_BACKEND` | `pm` en Production. También existe, solo para la rama `feat/pm-data-model-f1`, en Preview |
 | `RESEND_API_KEY` | **Pendiente** — necesaria para alertas por email |
+| `VITE_REQUIRE_AUTH` | `true` activa el login (email + contraseña). Sin ella, la app es abierta como hasta ahora. Ver `docs/AUTH_PLAN.md` |
+| `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS` | Solo servidor (`api/admin-users.js`, pestaña Administración). La clave de servicio nunca va en el navegador |
 
 Las variables `VITE_*` se embeben en el bundle en build time. **Cuidado:** un `.env.production` descargado con `vercel env pull` trae las `VITE_*` vacías y anula a `.env.local`; para un build local, pasarlas por entorno.
 

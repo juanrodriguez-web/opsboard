@@ -8,12 +8,14 @@ los automatismos entran por un endpoint de ingesta con token.
 - `supabase/migrations/20261116200000_auth_rls.sql`: cierra la base de datos a usuarios con sesión cuyo email esté en `people`. **No ejecutar hasta el paso 6.**
 - `supabase/migrations/20261116200001_auth_rls_rollback.sql`: vuelve a abrirlo todo (si alguien se queda fuera).
 - `supabase/functions/mail-ingest/index.ts`: única puerta para `/backlog-mail` cuando la base ya esté cerrada (token propio; solo lee lo mínimo y solo inserta en `mail_candidates`).
+- `api/admin-users.js`, `src/views/AdminView.jsx`, `src/lib/adminApi.js`: pestaña de administración (crear acceso, restablecer contraseña, listar). La clave de servicio solo existe en el servidor; el servidor comprueba que quien llama es administrador (`ADMIN_EMAILS`).
 - `scripts/mail-ingest.mjs`: usa el endpoint si existen `INGEST_URL` e `INGEST_TOKEN`; si no, el modo directo de hoy.
 
 ## Orden de despliegue (cada paso se puede deshacer)
 Cambio del 16/11: **email + contraseña sin enviar correos** (el SMTP no sirvió para el portal del empleado). Los usuarios los crea el administrador.
 1. **Supabase -> Authentication -> Sign In / Providers:** dejar el proveedor Email activo y **desactivar «Allow new users to sign up»** (si no, quien se registre con el email de otra persona entraría como ella).
-2. **Supabase -> Authentication -> Users -> Add user -> Create new user:** email, contraseña y marcar **Auto Confirm User**, uno por persona de `people` (Juan Rodriguez Peisel y Francisco Toledo). No se envía ningun correo.
+2. **Primer usuario (administrador), a mano:** Supabase -> Authentication -> Users -> Add user -> Create new user: el email de Juan, una contraseña y **Auto Confirm User**. El resto de personas se crean después desde la pestaña **🔐 Administración** de OpsBoard (visible solo para administradores): crear acceso, generar contraseña y restablecerla. No se envía ningun correo.
+2b. **Variables en Vercel (Produccion):** `SUPABASE_SERVICE_ROLE_KEY` (Supabase -> Project Settings -> API Keys -> service_role; es secreta, solo vive en Vercel y la usa `api/admin-users.js`) y `ADMIN_EMAILS` (emails de los administradores separados por comas, p. ej. el de Juan).
 3. **Emails en `people`:** deben coincidir exactamente con los de Authentication. Cualquier persona nueva: fila en `people` + usuario en Authentication.
 4. **Endpoint de ingesta:** desplegar la funcion con `verify_jwt` desactivado, crear el secreto `INGEST_TOKEN` (largo y aleatorio) y probar `context` e `insert`. Guardar `INGEST_URL` e `INGEST_TOKEN` en las tareas programadas de Backlog Mail en lugar de la clave publica.
 5. **Activar el login:** `VITE_REQUIRE_AUTH=true` en Vercel (Produccion) y redeploy. Probar con Juan y con Francisco (boton 🔑 para cambiar la contraseña). La base aun esta abierta: sirve para comprobar el flujo sin riesgo.

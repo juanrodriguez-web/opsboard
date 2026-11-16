@@ -7,6 +7,8 @@ export const AUTH_REQUIRED = import.meta.env.VITE_REQUIRE_AUTH === 'true'
 
 export const getSession = async () => (await supabase.auth.getSession()).data.session
 
+export const getAccessToken = async () => (await getSession())?.access_token || null
+
 export const onSessionChange = cb => {
   const { data } = supabase.auth.onAuthStateChange((_event, session) => cb(session))
   return () => data.subscription.unsubscribe()
