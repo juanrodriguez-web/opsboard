@@ -16,6 +16,9 @@ const getChecklist = async () => ({ id: null, items: [] })
 const addChecklistItem = async () => { throw new Error('Las checklists necesitan el backend PM') }
 const updateChecklistItem = addChecklistItem, deleteChecklistItem = addChecklistItem
 const listChecklistProgress = async () => ({})
+const listMailCandidates = async () => []
+const insertMailCandidates = async () => { throw new Error('Backlog Mail necesita el backend PM') }
+const decideMailCandidate = insertMailCandidates
 const listPeople = async () => []
 const updatePersonCapacity = async () => { throw new Error('La capacidad necesita el backend PM') }
-export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation, getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity }
+export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation, getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity, listMailCandidates, insertMailCandidates, decideMailCandidate }

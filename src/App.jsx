@@ -4,7 +4,7 @@ import {
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
   listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   addRelation as apiAddRelation, removeRelation as apiRemoveRelation,
-  getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity,
+  getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity, listMailCandidates, decideMailCandidate,
   BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
@@ -12,6 +12,7 @@ import { blockersOf, blockedBy, relatedTo, blockedIdSet, candidatesFor, completi
 import ListaView from './views/ListaView.jsx'
 import PortfolioView from './views/PortfolioView.jsx'
 import WorkloadView from './views/WorkloadView.jsx'
+import BacklogMailView from './views/BacklogMailView.jsx'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -4142,6 +4143,7 @@ export default function OpsBoard() {
   const [campanas,    setCampanas]   = useState([])
   const [relations,   setRelations]  = useState([])
   const [checkProgress, setCheckProgress] = useState({})
+  const [mailPending, setMailPending] = useState(0)
   const [proyectos,   setProyectos]  = useState([])
   const realtimeSub = useRef(null)
   const [loading,     setLoading]    = useState(true)
@@ -4181,6 +4183,7 @@ export default function OpsBoard() {
       const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys, relations: fetchedRels = [] } = await loadAll()
       setRelations(fetchedRels)
       listChecklistProgress().then(setCheckProgress).catch(() => {})
+      listMailCandidates('pending').then(l => setMailPending(l.length)).catch(() => {})
       setItems(fetched)
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
@@ -4252,6 +4255,10 @@ export default function OpsBoard() {
     setRelations(prev => prev.filter(r => r.id !== id))
   }
 
+  // Backlog Mail -> OpsBoard: these throw on failure so the view can undo its claim on the candidate.
+  const createTopicFromMail = async item => { await insertItems([item]); setItems(prev => [item, ...prev]) }
+  const createProjectFromMail = async row => { await insertProyectoRows([row]); const all = await loadAll(); setProyectos(all.proyectos) }
+
   const proyectosConOv = proyectos.map(p => {
     const ov = getProyOverrides()[norm(p.nombre)] || {}
     return Object.keys(ov).length > 0 ? { ...p, ...ov, _hasLocalProy:true } : p
@@ -4296,12 +4303,13 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','🧑 My Work','Tablero','☰ Lista','🗂️ Proyectos','📊 Portfolio','👥 Workload','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','🧑 My Work','Tablero','✉️ Backlog Mail','☰ Lista','🗂️ Proyectos','📊 Portfolio','👥 Workload','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
     '🧑 My Work':         'My Work',
     'Tablero':            'Tablero de Temas',
+    '✉️ Backlog Mail':    'Backlog Mail',
     '☰ Lista':            'Lista',
     '🗂️ Proyectos':      'Proyectos',
     '📊 Portfolio':      'Portfolio',
@@ -4318,6 +4326,7 @@ export default function OpsBoard() {
     'Dashboard':          '◈',
     '🧑 My Work':         '☺',
     'Tablero':            '⊞',
+    '✉️ Backlog Mail':    '✉',
     '☰ Lista':            '≣',
     '🗂️ Proyectos':      '◫',
     '📊 Portfolio':      '◧',
@@ -4399,6 +4408,7 @@ export default function OpsBoard() {
                 onMouseLeave={e => { if(!on) e.currentTarget.style.background='transparent' }}>
                 <span style={{ fontSize:12, opacity:.7, width:14, textAlign:'center', flexShrink:0 }}>{NAV_ICONS[v]}</span>
                 {VIEW_LABELS[v] || v.replace(/^[^\w]+/, '')}
+                {v === '✉️ Backlog Mail' && mailPending > 0 && <span style={{ marginLeft:'auto', background:C.accent, color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'1px 7px' }}>{mailPending}</span>}
               </button>
             )
           })}
@@ -4531,6 +4541,7 @@ export default function OpsBoard() {
                   onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} blockedIds={blockedIds} checkProgress={checkProgress} />
               )}
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
+              {vista === '✉️ Backlog Mail'    && <BacklogMailView supported={BACKEND === 'pm'} projectNames={proyectos.map(p => p.nombre)} onCreateTopic={createTopicFromMail} onCreateProject={createProjectFromMail} onCount={setMailPending} newId={uid} ui={{ C }} api={{ listMailCandidates, decideMailCandidate }} />}
               {vista === '👥 Workload'        && <WorkloadView items={allItems} supported={BACKEND === 'pm'} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} ui={{ C, Tag, fmtFecha }} api={{ listPeople, updatePersonCapacity }} />}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}

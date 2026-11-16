@@ -17,7 +17,7 @@ for (const f of readdirSync('supabase/migrations').sort()) await pg.exec(readFil
 await pg.exec(readFileSync('scripts/migration/remote/B_migrar_datos_f1b.sql', 'utf8'))
 await pg.exec('select * from f1e_explode_subtasks(true)')            // subtasks are child rows, as after the explode migration
 const dump = async t => (await pg.query(`select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) j from ${t} x`)).rows[0].j
-const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [], work_item_relations: [], work_item_checklists: [], checklist_items: [] }
+const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [], work_item_relations: [], work_item_checklists: [], checklist_items: [], mail_candidates: [] }
 
 // ── fake supabase-js (just the builder surface the backend uses) ──
 const norm = s => (s ?? '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -30,6 +30,7 @@ class Q {
   delete() { this.op = 'delete'; return this }
   eq(c, v) { this.f.push(r => r[c] === v); return this }
   neq(c, v) { this.f.push(r => r[c] !== v); return this }
+  in(c, arr) { this.f.push(r => arr.includes(r[c])); return this }
   is(c, v) { this.f.push(r => (r[c] ?? null) === v); return this }
   order(c, { ascending = true } = {}) { (this.ord ||= []).push([c, ascending]); return this }
   // SQL LIKE (case-insensitive): % = any run, _ = any char, backslash escapes the next char
@@ -58,6 +59,7 @@ class Q {
         if (this.t === 'work_item_relations' && rows.some(r => r.from_id === p.from_id && r.to_id === p.to_id && r.kind === p.kind)) return { data: null, error: { message: 'duplicate key value violates unique constraint' } }
         if (this.t === 'work_items' && p.legacy_id && rows.some(r => r.legacy_source === p.legacy_source && r.legacy_id === p.legacy_id)) return { data: null, error: { message: 'duplicate key (legacy_source, legacy_id)' } }
         const row = { id: randomUUID(), created_at: now, updated_at: now, tags: [], legacy: {}, legacy_subtareas: [], completed_at: null, description: '', notes: '', ...p }
+        if (this.t === 'mail_candidates') { row.status = row.status ?? 'pending'; row.created_ref = row.created_ref ?? null; row.decided_at = row.decided_at ?? null }   // DB defaults
         rows.push(row); out.push(row)
       }
       return { data: this.ret ? (this.one ? out[0] : out) : null, error: null }
@@ -338,6 +340,30 @@ rec('projects never updated keep health not_set and empty text', (await api.list
   rec('updatePersonCapacity stores weekly hours (comma-free number)', (await api.updatePersonCapacity(jp.id, '32.5')) === 32.5 && (await api.listPeople()).find(p => p.id === jp.id).capacityH === 32.5)
   rec('capacity validation: negative, > 168 and text rejected', await expectErr(() => api.updatePersonCapacity(jp.id, -1), /entre 0 y 168/) && await expectErr(() => api.updatePersonCapacity(jp.id, 200), /entre 0 y 168/) && await expectErr(() => api.updatePersonCapacity(jp.id, 'x'), /entre 0 y 168/))
   rec('capacity cleared with empty/null', (await api.updatePersonCapacity(jp.id, '')) === null && (await api.listPeople()).find(p => p.id === jp.id).capacityH === null)
+}
+// ── 12. Backlog Mail ──
+{
+  const expectErr = async (fn, re) => { try { await fn(); return false } catch (e) { return re.test(e.message) } }
+  const cand = (n, extra = {}) => ({ messageId: 'm-' + n, subject: 'Asunto ' + n, senderName: 'Javier Mora', senderEmail: 'Javier.Mora@Sercom.es', receivedAt: '2026-11-16T08:00:00Z', summary: 'Resumen ' + n, suggestedTitle: 'Tarea ' + n, kind: 'topic', suggestedProject: '', suggestedPriority: 'P1', dueDate: '2026-12-01', prioritySender: true, webLink: 'https://outlook/x/' + n, ...extra })
+  const r1 = await api.insertMailCandidates([cand(1), cand(2, { kind: 'project', prioritySender: false }), cand(1), { messageId: '', suggestedTitle: 'x' }, { messageId: 'm-bad', suggestedTitle: '  ' }])
+  rec('insertMailCandidates: valid ones inserted; in-batch duplicate and invalid ones reported, not inserted', r1.inserted === 2 && r1.skipped.length === 3 && tables.mail_candidates.length === 2, JSON.stringify(r1.skipped))
+  const row1 = tables.mail_candidates.find(r => r.message_id === 'm-1')
+  rec('row stored with normalised e-mail, status pending, no body fields', row1.sender_email === 'javier.mora@sercom.es' && row1.status === 'pending' && !('body' in row1) && row1.due_date === '2026-12-01')
+  const r2 = await api.insertMailCandidates([cand(1), cand(3, { dueDate: 'mañana', suggestedPriority: 'P9', kind: 'weird' })])
+  rec('re-inserting a known message id is skipped (any status); bad due/priority/kind are sanitised', r2.inserted === 1 && r2.skipped.some(s => s.reason === 'already known') && tables.mail_candidates.find(r => r.message_id === 'm-3').due_date === null && tables.mail_candidates.find(r => r.message_id === 'm-3').suggested_priority === '' && tables.mail_candidates.find(r => r.message_id === 'm-3').kind === 'topic')
+  const pend = await api.listMailCandidates('pending')
+  rec('listMailCandidates(pending) returns the UI shape', pend.length === 3 && pend[0].messageId && 'prioritySender' in pend[0] && 'suggestedTitle' in pend[0])
+  const c1 = pend.find(p => p.messageId === 'm-1')
+  const created = await api.decideMailCandidate(c1.id, { to: 'created', createdRef: 'topic-xyz' })
+  rec('decide -> created stores ref and decided_at', created.status === 'created' && created.createdRef === 'topic-xyz' && !!created.decidedAt)
+  rec('a second decision on the same candidate is rejected (no double creation)', await expectErr(() => api.decideMailCandidate(c1.id, { to: 'created', createdRef: 'again' }), /otra pestaña/))
+  const c2 = pend.find(p => p.messageId === 'm-2')
+  await api.decideMailCandidate(c2.id, { to: 'ignored' })
+  rec('ignored stays ignored when the same e-mail is proposed again', (await api.insertMailCandidates([cand(2)])).inserted === 0 && (await api.listMailCandidates('ignored')).length === 1)
+  await api.decideMailCandidate(c2.id, { from: 'ignored', to: 'pending' })
+  rec('restore ignored -> pending clears decided_at', (await api.listMailCandidates('pending')).some(p => p.id === c2.id && p.decidedAt === null))
+  rec('invalid target state rejected', await expectErr(() => api.decideMailCandidate(c2.id, { to: 'deleted' }), /no válido/))
+  rec('listMailCandidates() without filter returns everything', (await api.listMailCandidates()).length === 3)
 }
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)

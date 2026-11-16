@@ -6,6 +6,7 @@ import {
   workToItem, projectToApp, workToHito, commentToApp, itemPatchToWork, estadoSheetFor, statusLegacyFromKey,
 } from './mappers.js'
 import { wouldCreateCycle } from '../../deps.js'
+import { validateIncoming as validateMail } from '../../mail.js'
 
 const ITEM_COLS = '*'
 
@@ -423,7 +424,38 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     return v
   }
 
-  async function loadAll() {    const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
+  // ── Backlog Mail (mail_candidates; see supabase/migrations/20261116160000_mail_candidates.sql) ──
+  const toCandidate = r => ({ id: r.id, messageId: r.message_id, threadId: r.thread_id || null, subject: r.subject || '', senderName: r.sender_name || '', senderEmail: r.sender_email || '',
+    receivedAt: r.received_at || null, summary: r.summary || '', suggestedTitle: r.suggested_title, kind: r.kind, suggestedProject: r.suggested_project || '',
+    suggestedPriority: r.suggested_priority || '', dueDate: r.due_date || null, prioritySender: !!r.priority_sender, duplicateOf: r.duplicate_of || '',
+    webLink: r.web_link || '', status: r.status, createdRef: r.created_ref || null, decidedAt: r.decided_at || null })
+  async function listMailCandidates(status) {
+    let q = client.from('mail_candidates').select('*')
+    if (status) q = q.eq('status', status)
+    return (unwrap(await q.order('received_at', { ascending: false })) || []).map(toCandidate)
+  }
+  // Used by the ingestion (skill). Already-known message ids (any status) are skipped, so "Ignore" is permanent.
+  async function insertMailCandidates(candidates) {
+    const valid = [], skipped = []
+    for (const c of candidates || []) { const v = validateMail(c); if (v.ok) valid.push(v.row); else skipped.push({ messageId: c?.messageId ?? null, reason: v.reason }) }
+    const seen = new Set()
+    const unique = valid.filter(r => (seen.has(r.message_id) ? (skipped.push({ messageId: r.message_id, reason: 'duplicated in this batch' }), false) : (seen.add(r.message_id), true)))
+    if (!unique.length) return { inserted: 0, skipped }
+    const known = new Set((unwrap(await client.from('mail_candidates').select('message_id').in('message_id', unique.map(r => r.message_id))) || []).map(r => r.message_id))
+    const fresh = unique.filter(r => (known.has(r.message_id) ? (skipped.push({ messageId: r.message_id, reason: 'already known' }), false) : true))
+    if (fresh.length) unwrap(await client.from('mail_candidates').insert(fresh), 'mail_candidates')
+    return { inserted: fresh.length, skipped }
+  }
+  // Moves a candidate from `from` to `to` only if it is still in `from` (two tabs / double click cannot create it twice).
+  async function decideMailCandidate(id, { from = 'pending', to, createdRef = null }) {
+    if (!['pending', 'created', 'ignored'].includes(to)) throw new Error('Estado no válido')
+    const rows = unwrap(await client.from('mail_candidates').update({ status: to, created_ref: to === 'created' ? createdRef : null, decided_at: to === 'pending' ? null : new Date().toISOString() }).eq('id', id).eq('status', from).select('*'))
+    if (!rows || !rows.length) throw new Error('Esta propuesta ya se había decidido en otra pestaña')
+    return toCandidate(rows[0])
+  }
+
+  async function loadAll() {
+    const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
     const relations = await listRelations().catch(() => [])      // after listItems so app ids are known
     return { items, proyectos, campanas, relations }
   }
@@ -434,7 +466,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
     listCampanas, listPlanAccion, findPersonByEmail,
     listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation,
-    listPeople, updatePersonCapacity,
+    listPeople, updatePersonCapacity, listMailCandidates, insertMailCandidates, decideMailCandidate,
     getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,
     _test: { loadRefs, dateToUi },
   }
