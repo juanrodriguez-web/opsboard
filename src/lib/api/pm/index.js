@@ -136,6 +136,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
       priority: prioToPm(item.prioridad || ''), assignee_id: assigneeId,
       start_date: dateFromUi(item.fechaInicio), due_date: dateFromUi(item.fechaFin),
       tags: item.category ? [item.category] : [], risk: item.risk || 'green', legacy_subtareas: [],
+      estimate_h: item.estimateH === null || item.estimateH === undefined || item.estimateH === '' ? null : Number(item.estimateH),
       legacy: { estado_sheet: item.estadoSheet || estadoSheetFor(item.status || 'pending'), archivos: item.archivos || '', category: item.category || 'projects',
                 proyecto: projectId ? '' : (item.proyecto || '') },
     }
@@ -410,8 +411,19 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     return out
   }
 
-  async function loadAll() {
-    const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
+  // ── workload (people.capacity_h = weekly hours; work_items.estimate_h = effort) ──
+  async function listPeople() {
+    const rows = unwrap(await client.from('people').select('id, name, email, capacity_h, active').eq('active', true).order('name', { ascending: true })) || []
+    return rows.map(p => ({ id: p.id, name: p.name, email: p.email || '', capacityH: p.capacity_h === null || p.capacity_h === undefined ? null : Number(p.capacity_h) }))
+  }
+  async function updatePersonCapacity(id, hours) {
+    let v = null
+    if (hours !== null && hours !== '' && hours !== undefined) { v = Number(hours); if (!Number.isFinite(v) || v < 0 || v > 168) throw new Error('La capacidad semanal debe estar entre 0 y 168 horas') }
+    unwrap(await client.from('people').update({ capacity_h: v }).eq('id', id))
+    return v
+  }
+
+  async function loadAll() {    const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
     const relations = await listRelations().catch(() => [])      // after listItems so app ids are known
     return { items, proyectos, campanas, relations }
   }
@@ -422,6 +434,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
     listCampanas, listPlanAccion, findPersonByEmail,
     listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation,
+    listPeople, updatePersonCapacity,
     getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,
     _test: { loadRefs, dateToUi },
   }

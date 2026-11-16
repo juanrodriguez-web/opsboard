@@ -24,4 +24,5 @@ export const {
   listPlanAccion, listCampanas, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   listRelations, addRelation, removeRelation,
   getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,
+  listPeople, updatePersonCapacity,
 } = api

@@ -4,13 +4,14 @@ import {
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
   listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   addRelation as apiAddRelation, removeRelation as apiRemoveRelation,
-  getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,
+  getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity,
   BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
 import { blockersOf, blockedBy, relatedTo, blockedIdSet, candidatesFor, completionWarning } from './lib/deps.js'
 import ListaView from './views/ListaView.jsx'
 import PortfolioView from './views/PortfolioView.jsx'
+import WorkloadView from './views/WorkloadView.jsx'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -3533,6 +3534,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
   const [ePrio,  setEPrio]  = useState(itemOrig.prioridad || '')
   const [eFin,   setEFin]   = useState(itemOrig.fechaFin ? fdStr(itemOrig.fechaFin) : '')
   const [eNotas, setENotas] = useState(itemOrig.notas || '')
+  const [eEst,   setEEst]   = useState(itemOrig.estimateH ? String(itemOrig.estimateH) : '')
   const [eProy,  setEProy]  = useState(itemOrig.proyecto || '')
   const [eCat,   setECat]   = useState(itemOrig.category || 'projects')
   const [subtareas, setSubtareas] = useState(Array.isArray(itemOrig.subtareas) ? itemOrig.subtareas : [])
@@ -3556,6 +3558,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
       risk:       mapRisk(ePrio),
       fechaFin:   fechaFinParsed,
       notas:      eNotas.trim(),
+      estimateH:  eEst.trim() === '' || !Number.isFinite(Number(eEst.replace(',', '.'))) || Number(eEst.replace(',', '.')) < 0 ? null : Number(eEst.replace(',', '.')),
       proyecto:   eProy,
       category:   eCat,
       subtareas,
@@ -3713,6 +3716,10 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                     {proyectoNames.map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Esfuerzo (horas)</div>
+                  <input value={eEst} onChange={e=>setEEst(e.target.value)} inputMode="decimal" placeholder="Ej. 8" style={iSt} />
+                </div>
               </div>
               <div>
                 <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Notas</div>
@@ -3733,6 +3740,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                   background:C.card, borderRadius:8, padding:10 }}>{item.objetivo}</p>
               </div>
             )}
+            {item.estimateH > 0 && <div style={{ marginBottom:14, fontSize:12, color:C.muted }}>Esfuerzo estimado: <b style={{ color:C.text }}>{item.estimateH} h</b></div>}
             {item.notas && (
               <div style={{ marginBottom:14 }}>
                 <Lbl>Notas</Lbl>
@@ -4288,7 +4296,7 @@ export default function OpsBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
-  const VISTAS = ['Dashboard','🧑 My Work','Tablero','☰ Lista','🗂️ Proyectos','📊 Portfolio','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
+  const VISTAS = ['Dashboard','🧑 My Work','Tablero','☰ Lista','🗂️ Proyectos','📊 Portfolio','👥 Workload','📋 Plan de Acción','📋 Reporte Semanal','📅 Campañas CVM','✨ IA Intake','⧆ Histórico']
 
   const VIEW_LABELS = {
     'Dashboard':          'Dashboard Operativo',
@@ -4297,6 +4305,7 @@ export default function OpsBoard() {
     '☰ Lista':            'Lista',
     '🗂️ Proyectos':      'Proyectos',
     '📊 Portfolio':      'Portfolio',
+    '👥 Workload':        'Workload',
     '📋 Plan de Acción':  'Plan de Acción 26/27',
     '📋 Reporte Semanal': 'Reporte Semanal Ejecutivo',
     '📅 Campañas CVM':   'Campañas CVM',
@@ -4312,6 +4321,7 @@ export default function OpsBoard() {
     '☰ Lista':            '≣',
     '🗂️ Proyectos':      '◫',
     '📊 Portfolio':      '◧',
+    '👥 Workload':        '◔',
     '📋 Plan de Acción':  '◐',
     '📋 Reporte Semanal': '≡',
     '📅 Campañas CVM':   '◷',
@@ -4521,6 +4531,7 @@ export default function OpsBoard() {
                   onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} blockedIds={blockedIds} checkProgress={checkProgress} />
               )}
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
+              {vista === '👥 Workload'        && <WorkloadView items={allItems} supported={BACKEND === 'pm'} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} ui={{ C, Tag, fmtFecha }} api={{ listPeople, updatePersonCapacity }} />}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}

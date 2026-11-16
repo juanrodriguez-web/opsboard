@@ -68,6 +68,7 @@ export function workToItem(w, refs, children = null) {
     fechaFin: dateToUi(w.due_date),
     archivos: legacy.archivos || '',
     notas: w.notes || '',
+    estimateH: w.estimate_h === null || w.estimate_h === undefined ? null : Number(w.estimate_h),
     proyecto: refs.projectById.get(w.project_id)?.name || legacy.proyecto || '',
     subtareas: children && children.length ? children.map(c => childToSubtask(c, refs)) : (Array.isArray(w.legacy_subtareas) ? w.legacy_subtareas : []),
     created_at: w.created_at,
@@ -121,6 +122,10 @@ export function itemPatchToWork(fields, ctx) {
   if (fields.tema !== undefined) p.title = fields.tema
   if (fields.objetivo !== undefined) p.description = fields.objetivo
   if (fields.notas !== undefined) p.notes = fields.notas
+  if (fields.estimateH !== undefined) {   // hours of effort: empty -> null, otherwise a number >= 0
+    if (fields.estimateH === null || fields.estimateH === '') p.estimate_h = null
+    else { const h = Number(fields.estimateH); if (!Number.isFinite(h) || h < 0) throw new Error('El esfuerzo debe ser un número de horas >= 0'); p.estimate_h = h }
+  }
   if (fields.risk !== undefined) p.risk = fields.risk
   if (fields.prioridad !== undefined) p.priority = prioToPm(fields.prioridad)
   if (fields.fechaInicio !== undefined) p.start_date = dateFromUi(fields.fechaInicio)

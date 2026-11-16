@@ -320,5 +320,24 @@ rec('projects never updated keep health not_set and empty text', (await api.list
   rec('delete item', (await api.getChecklist(a)).items.length === 2 && tables.checklist_items.some(r => r.id === i2.id))
   rec('item without checklist is absent from progress', !(await api.listChecklistProgress())['nope'])
 }
+// ── 11. workload: effort + capacity ──
+{
+  const expectErr = async (fn, re) => { try { await fn(); return false } catch (e) { return re.test(e.message) } }
+  const first = (await api.listItems())[0]
+  rec('items expose estimateH (null when not set)', first.estimateH === null)
+  await api.updateItem(first.id, { estimateH: '6,5'.replace(',', '.') })
+  rec('updateItem(estimateH) stores estimate_h as a number and listItems returns it', tables.work_items.find(w => w.legacy_id === first.id).estimate_h === 6.5 && (await api.listItems()).find(i => i.id === first.id).estimateH === 6.5)
+  await api.updateItem(first.id, { estimateH: null })
+  rec('estimateH null/empty clears it', tables.work_items.find(w => w.legacy_id === first.id).estimate_h === null)
+  rec('negative or non-numeric effort rejected', await expectErr(() => api.updateItem(first.id, { estimateH: -2 }), /horas/) && await expectErr(() => api.updateItem(first.id, { estimateH: 'abc' }), /horas/))
+  await api.insertItems([{ id: 'est-new', tema: 'Con esfuerzo', status: 'pending', risk: 'green', category: 'tools', propietario: '', proyecto: '', prioridad: '', notas: '', objetivo: '', estimateH: 12 }])
+  rec('insertItems keeps estimateH', (await api.listItems()).find(i => i.id === 'est-new').estimateH === 12)
+  const ppl = await api.listPeople()
+  rec('listPeople: active people with capacityH null by default', ppl.length >= 2 && ppl.every(p => p.capacityH === null) && ppl.some(p => /Juan/.test(p.name)))
+  const jp = ppl.find(p => /Juan/.test(p.name))
+  rec('updatePersonCapacity stores weekly hours (comma-free number)', (await api.updatePersonCapacity(jp.id, '32.5')) === 32.5 && (await api.listPeople()).find(p => p.id === jp.id).capacityH === 32.5)
+  rec('capacity validation: negative, > 168 and text rejected', await expectErr(() => api.updatePersonCapacity(jp.id, -1), /entre 0 y 168/) && await expectErr(() => api.updatePersonCapacity(jp.id, 200), /entre 0 y 168/) && await expectErr(() => api.updatePersonCapacity(jp.id, 'x'), /entre 0 y 168/))
+  rec('capacity cleared with empty/null', (await api.updatePersonCapacity(jp.id, '')) === null && (await api.listPeople()).find(p => p.id === jp.id).capacityH === null)
+}
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)
