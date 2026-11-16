@@ -8,6 +8,7 @@ import {
   BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
+import { AUTH_REQUIRED, signOut } from './lib/auth.js'
 import { blockersOf, blockedBy, relatedTo, blockedIdSet, candidatesFor, completionWarning } from './lib/deps.js'
 import ListaView from './views/ListaView.jsx'
 import PortfolioView from './views/PortfolioView.jsx'
@@ -3878,7 +3879,7 @@ export default function OpsBoard() {
     lsSet('opsboard-me', { id: p.id, email: p.email, name: p.name }); setMe({ id: p.id, email: p.email, name: p.name })
     return null
   }
-  const logoutMe = () => { try { localStorage.removeItem('opsboard-me') } catch {}; setMe(null) }
+  const logoutMe = () => { try { localStorage.removeItem('opsboard-me') } catch {}; setMe(null); if (AUTH_REQUIRED) signOut() }
   useEffect(() => {   // si la persona ya no existe o cambió de nombre, se actualiza o se cierra la sesión
     if (!me?.email) return
     findPersonByEmail(me.email).then(p => { if (!p) logoutMe(); else if (p.name !== me.name || p.id !== me.id) { lsSet('opsboard-me', { id: p.id, email: p.email, name: p.name }); setMe({ id: p.id, email: p.email, name: p.name }) } }).catch(() => {})
