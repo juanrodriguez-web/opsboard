@@ -1934,7 +1934,50 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
 }
 
 // ── Proyectos ─────────────────────────────────────────────────────────────────
-const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onItemChange, lang='es' }) => {
+// "+ Nuevo proyecto": creates a project in the active backend (name required and unique, owner from the known people).
+const NuevoProyecto = ({ proyectos, onCreate, onToast }) => {
+  const EMPTY = { nombre:'', propietario:'', prioridad:'', status:'pending', fecha_fin:'' }
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState(EMPTY)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const set = (k, v) => { setF(p => ({ ...p, [k]: v })); setErr('') }
+  const owners = [...new Set([...KNOWN_OWNERS, ...proyectos.map(p => p.propietario).filter(Boolean)])]
+  const iSt = { background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 9px', fontSize:12, outline:'none', boxSizing:'border-box', minWidth:0 }
+  const submit = async () => {
+    const nombre = f.nombre.trim()
+    if (!nombre) { setErr('Escribe un nombre para el proyecto'); return }
+    if (proyectos.some(p => norm(p.nombre) === norm(nombre))) { setErr('Ya existe un proyecto con ese nombre'); return }
+    setBusy(true); setErr('')
+    try {
+      await onCreate({ id: uid(), nombre, propietario: f.propietario, prioridad: f.prioridad, status: f.status, fecha_fin: f.fecha_fin || null })
+      onToast?.('Proyecto creado'); setF(EMPTY); setOpen(false)
+    } catch (e) { setErr('No se pudo crear: ' + (e.message || e)) }
+    setBusy(false)
+  }
+  if (!open) return <button onClick={() => setOpen(true)} style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:`1.5px solid ${C.accent}`, background:C.accent+'18', color:C.accent, whiteSpace:'nowrap' }}>+ Nuevo proyecto</button>
+  return (
+    <div style={{ flexBasis:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:12, display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+      <input autoFocus aria-label="Nombre del proyecto" placeholder="Nombre del proyecto" value={f.nombre} onChange={e => set('nombre', e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit() }} style={{ ...iSt, flex:'2 1 220px' }} />
+      <select aria-label="Propietario" value={f.propietario} onChange={e => set('propietario', e.target.value)} style={{ ...iSt, flex:'1 1 150px' }}>
+        <option value="">Sin propietario</option>{owners.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <select aria-label="Prioridad" value={f.prioridad} onChange={e => set('prioridad', e.target.value)} style={iSt}>
+        <option value="">Sin prioridad</option>{['P0','P1','P2','P3'].map(p => <option key={p} value={p}>{p}</option>)}
+      </select>
+      <select aria-label="Estado" value={f.status} onChange={e => set('status', e.target.value)} style={iSt}>
+        {ST.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+      </select>
+      <input type="date" aria-label="Fecha de fin" value={f.fecha_fin} onChange={e => set('fecha_fin', e.target.value)} style={{ ...iSt, colorScheme:'light' }} />
+      <Btn onClick={submit} disabled={busy}>{busy ? 'Creando…' : 'Crear'}</Btn>
+      <Btn v="sec" onClick={() => { setOpen(false); setF(EMPTY); setErr('') }}>Cancelar</Btn>
+      {err && <div role="alert" style={{ flexBasis:'100%', color:'#f43f5e', fontSize:12 }}>{err}</div>}
+    </div>
+  )
+}
+
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onItemChange, onCreateProject, onToast, lang='es' }) => {
   const [filtSt,              setFiltSt]              = useState('all')
   const [showSinProyecto,     setShowSinProyecto]     = useState(false)
   const [showBacklog,         setShowBacklog]         = useState(false)
@@ -1972,10 +2015,10 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:32, textAlign:'center' }}>
         <div style={{ fontSize:36, marginBottom:12 }}>🗂️</div>
         <h3 style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:8 }}>No hay proyectos todavía</h3>
-        <p style={{ fontSize:13, color:C.muted, lineHeight:1.7 }}>
-          Pulsa el botón <b style={{ color:C.text }}>⬆ Migrar Proyectos</b> arriba para importar los proyectos del Sheet,
-          o créalos directamente desde el panel de administración de Supabase.
+        <p style={{ fontSize:13, color:C.muted, lineHeight:1.7, marginBottom:14 }}>
+          Crea el primero con el botón de abajo, o pulsa <b style={{ color:C.text }}>⬆ Migrar Proyectos</b> arriba para importar los del Sheet.
         </p>
+        {onCreateProject && <NuevoProyecto proyectos={proyectos} onCreate={onCreateProject} onToast={onToast} />}
       </div>
     </div>
   )
@@ -2024,6 +2067,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
             </button>
           )
         })}
+        {onCreateProject && <NuevoProyecto proyectos={proyectos} onCreate={onCreateProject} onToast={onToast} />}
         <div style={{ marginLeft:'auto', display:'flex', gap:4, flexShrink:0 }}>
           {[{id:'cards',l:'⊞'},{id:'list',l:'☰'}].map(v => (
             <button key={v.id} onClick={() => setModo(v.id)} title={v.id==='cards'?'Vista Cards':'Vista Lista'}
@@ -4577,7 +4621,7 @@ export default function OpsBoard() {
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
               {vista === '✉️ Backlog Mail'    && <BacklogMailView supported={BACKEND === 'pm'} projectNames={proyectos.map(p => p.nombre)} onCreateTopic={createTopicFromMail} onCreateProject={createProjectFromMail} onCount={setMailPending} newId={uid} ui={{ C }} api={{ listMailCandidates, decideMailCandidate }} />}
               {vista === '👥 Workload'        && <WorkloadView items={allItems} supported={BACKEND === 'pm'} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} ui={{ C, Tag, fmtFecha }} api={{ listPeople, updatePersonCapacity }} />}
-              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} onCreateProject={BACKEND === 'pm' ? createProjectFromMail : undefined} onToast={msg => setToast(msg)} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}
               {vista === '☰ Lista'            && <ListaView items={allItems} me={me} owners={KNOWN_OWNERS} projectNames={proyectos.map(p => p.nombre)} onItemChange={onItemChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, priColor, fmtFecha }} api={{ listSavedViews, saveSavedView, deleteSavedView }} />}
