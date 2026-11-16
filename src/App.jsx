@@ -3521,7 +3521,7 @@ const DepsSection = ({ item, relations, allItems, onAdd, onRemove }) => {
 }
 
 // ── ModalItem ─────────────────────────────────────────────────────────────────
-const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation, onCheckProgress }) => {
+const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation, onCheckProgress, onDelete }) => {
   const [item,    setItem]    = useState(itemOrig)
   const [editing, setEditing] = useState(false)
   const [nc,      setNc]      = useState('')
@@ -3536,6 +3536,8 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
   const [eFin,   setEFin]   = useState(itemOrig.fechaFin ? fdStr(itemOrig.fechaFin) : '')
   const [eNotas, setENotas] = useState(itemOrig.notas || '')
   const [eEst,   setEEst]   = useState(itemOrig.estimateH ? String(itemOrig.estimateH) : '')
+  const [estErr, setEstErr] = useState('')
+  const [confirmDel, setConfirmDel] = useState(false)
   const [eProy,  setEProy]  = useState(itemOrig.proyecto || '')
   const [eCat,   setECat]   = useState(itemOrig.category || 'projects')
   const [subtareas, setSubtareas] = useState(Array.isArray(itemOrig.subtareas) ? itemOrig.subtareas : [])
@@ -3548,6 +3550,10 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
   }, [editing])
 
   const guardar = () => {
+    const estRaw = eEst.trim().replace(',', '.')
+    const estNum = estRaw === '' ? null : Number(estRaw)
+    if (estNum !== null && (!Number.isFinite(estNum) || estNum < 0)) { setEstErr('Escribe un número de horas igual o mayor que 0'); return }
+    setEstErr('')
     const fechaFinParsed = eFin ? new Date(eFin + 'T12:00') : null
     const fields = {
       tema:       eTema.trim(),
@@ -3559,7 +3565,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
       risk:       mapRisk(ePrio),
       fechaFin:   fechaFinParsed,
       notas:      eNotas.trim(),
-      estimateH:  eEst.trim() === '' || !Number.isFinite(Number(eEst.replace(',', '.'))) || Number(eEst.replace(',', '.')) < 0 ? null : Number(eEst.replace(',', '.')),
+      estimateH:  estNum,
       proyecto:   eProy,
       category:   eCat,
       subtareas,
@@ -3719,7 +3725,8 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                 </div>
                 <div>
                   <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Esfuerzo (horas)</div>
-                  <input value={eEst} onChange={e=>setEEst(e.target.value)} inputMode="decimal" placeholder="Ej. 8" style={iSt} />
+                  <input value={eEst} onChange={e=>{ setEEst(e.target.value); setEstErr('') }} inputMode="decimal" placeholder="Ej. 8" style={{ ...iSt, ...(estErr ? { borderColor:'#f43f5e' } : {}) }} />
+                  {estErr && <div role="alert" style={{ color:'#f43f5e', fontSize:11, marginTop:3 }}>{estErr}</div>}
                 </div>
               </div>
               <div>
@@ -3827,17 +3834,25 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
         {/* Footer */}
         <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.border}`,
           display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <button
-            onClick={() => {
-              if (!window.confirm('¿Eliminar este tema del tablero local?')) return
-              onItemChange(item.id, { status:'done', _deleted:true })
-              onItemChange(item.id, { status:'done', _deleted:true })
-              onClose()
-            }}
-            style={{ background:'none', border:'none', color:'#f43f5e', fontSize:12,
-              cursor:'pointer', padding:'4px 0', fontWeight:600 }}>
-            Eliminar local
-          </button>
+          {!confirmDel ? (
+            <button onClick={() => setConfirmDel(true)}
+              style={{ background:'none', border:'none', color:'#f43f5e', fontSize:12,
+                cursor:'pointer', padding:'4px 0', fontWeight:600 }}>
+              Eliminar tema
+            </button>
+          ) : (
+            <span style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
+              <span style={{ color:C.muted }}>¿Eliminar para siempre? Se borran también sus subtareas.</span>
+              <button onClick={() => { setConfirmDel(false); onDelete?.(item.id) }}
+                style={{ background:'#f43f5e', border:'none', color:'#fff', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer', fontWeight:600 }}>
+                Sí, eliminar
+              </button>
+              <button onClick={() => setConfirmDel(false)}
+                style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer' }}>
+                No
+              </button>
+            </span>
+          )}
           <Btn v="sec" onClick={onClose}>Cerrar</Btn>
         </div>
       </div>
@@ -4171,6 +4186,9 @@ export default function OpsBoard() {
   const [asF,         setAsF]        = useState('all')
   const [modo,        setModo]       = useState('kanban')
   const [toast,       setToast]      = useState(null)
+  const [confirmDlg,  setConfirmDlg]  = useState(null)             // in-app confirmation (replaces window.confirm)
+  const askConfirm = text => new Promise(res => setConfirmDlg({ text, res }))
+  const askingRef = useRef(new Set())
   const [showIntake,  setShowIntake] = useState(false)
   const [intakeLog,   setIntakeLog]  = useState(null)
 
@@ -4222,14 +4240,20 @@ export default function OpsBoard() {
   const itemsRef = useRef([]); itemsRef.current = items
   const relsRef = useRef([]); relsRef.current = relations
   const blockedIds = blockedIdSet(relations, allItems)
-  const onItemChange = (id, fields) => {
+  const onItemChange = async (id, fields) => {
     // Dependencias: al completar un tema con bloqueos sin resolver se pide confirmación (se puede forzar)
     const cur = itemsRef.current.find(i => i.id === id)
     if (fields.status === 'done' && cur && cur.status !== 'done') {
       const warn = completionWarning(id, relsRef.current, itemsRef.current.filter(i => !i._deleted))
-      if (warn && !window.confirm(warn)) {
-        const { status, estadoSheet, ...rest } = fields; fields = rest
-        setToast('Se mantiene el estado: el tema sigue bloqueado')
+      if (warn) {
+        if (askingRef.current.has(id)) return                       // second identical call while the dialog is open
+        askingRef.current.add(id)
+        const ok = await askConfirm(warn)
+        askingRef.current.delete(id)
+        if (!ok) {
+          const { status, estadoSheet, ...rest } = fields; fields = rest
+          setToast('Se mantiene el estado: el tema sigue bloqueado')
+        }
       }
     }
     if (!Object.keys(fields).length) return
@@ -4257,6 +4281,16 @@ export default function OpsBoard() {
 
   // Backlog Mail -> OpsBoard: these throw on failure so the view can undo its claim on the candidate.
   const createTopicFromMail = async item => { await insertItems([item]); setItems(prev => [item, ...prev]) }
+  const deleteTopic = async id => {
+    try {
+      await deleteItem(id)
+      setItems(prev => prev.filter(i => i.id !== id))
+      setRelations(prev => prev.filter(r => r.fromId !== id && r.toId !== id))
+      setCheckProgress(prev => { const { [id]: _drop, ...rest } = prev; return rest })
+      setItemActivo(prev => (prev && prev.id === id ? null : prev))
+      setToast('Tema eliminado')
+    } catch (e) { setToast('No se pudo eliminar: ' + (e.message || e)) }
+  }
   const createProjectFromMail = async row => { await insertProyectoRows([row]); const all = await loadAll(); setProyectos(all.proyectos) }
 
   const proyectosConOv = proyectos.map(p => {
@@ -4552,8 +4586,8 @@ export default function OpsBoard() {
               {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
               {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang.toUpperCase()} onDeleteItem={async (id) => {
                 const it = items.find(i => i.id === id)
-                if (!window.confirm(`¿Borrar el tema "${it?.tema || id}"? Esta acción no se puede deshacer.`)) return
-                await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id)); setRelations(prev => prev.filter(r => r.fromId !== id && r.toId !== id))
+                if (!(await askConfirm(`¿Borrar el tema "${it?.tema || id}"? Esta acción no se puede deshacer.`))) return
+                await deleteTopic(id)
               }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
@@ -4577,7 +4611,19 @@ export default function OpsBoard() {
           proyectoNames={proyectos.map(p => p.nombre)}
           relations={relations} allItems={allItems} onAddRelation={addRelation} onRemoveRelation={removeRelation}
           onCheckProgress={(id, pr) => setCheckProgress(prev => ({ ...prev, [id]: pr }))}
+          onDelete={deleteTopic}
           onToast={msg => setToast(msg)} />
+      )}
+      {confirmDlg && (
+        <div role="dialog" aria-modal="true" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:16 }}>
+          <div style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:10, padding:20, maxWidth:440, width:'100%' }}>
+            <div style={{ whiteSpace:'pre-wrap', fontSize:13, lineHeight:1.5, marginBottom:16 }}>{confirmDlg.text}</div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <Btn v="sec" onClick={() => { confirmDlg.res(false); setConfirmDlg(null) }}>Cancelar</Btn>
+              <Btn onClick={() => { confirmDlg.res(true); setConfirmDlg(null) }}>Aceptar</Btn>
+            </div>
+          </div>
+        </div>
       )}
       {showIntake && (
         <IntakeModal
