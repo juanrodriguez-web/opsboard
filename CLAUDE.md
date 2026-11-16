@@ -120,7 +120,7 @@ const KNOWN_OWNERS = ['Juan Rodriguez Peisel','Francisco Toledo','Nacho Cruz','M
 1. **Carga inicial:** `loadAll()` de `src/lib/api` (items, proyectos, campañas).
 2. **Escritura:** `onItemChange(id, fields)` → `updateItem()`; altas con `insertItems()`; borrado con `deleteItem()` (el Reporte pide confirmación antes de borrar).
 3. **Tiempo real:** `subscribeToItems()` escucha `work_items` (añadida a la publicación `supabase_realtime`).
-4. **Borrado y proyectos**: "Eliminar tema" borra de verdad (`deleteItem`; subtareas, checklists, comentarios y relaciones caen por cascada) con confirmación en línea; los diálogos de confirmación son propios (`askConfirm`), no `window.confirm`. "+ Nuevo proyecto" (vista Proyectos) crea proyectos con `insertProyectoRows` (solo backend `pm`). El Histórico usa `completedAt` (columna `completed_at`); lo cerrado sin fecha sale en "Sin fecha de cierre".
+4. **Borrado y proyectos**: "Eliminar tema" borra de verdad (`deleteItem`; subtareas, checklists, comentarios y relaciones caen por cascada) con confirmación en línea; los diálogos de confirmación son propios (`askConfirm`), no `window.confirm`. "+ Nuevo proyecto" (vista Proyectos) crea proyectos con `insertProyectoRows` (solo backend `pm`). Los proyectos se borran desde su detalle (🗑 Eliminar, `deleteProyecto`): se borran sus hitos y comentarios y sus temas quedan sin proyecto. El Histórico usa `completedAt` (columna `completed_at`); lo cerrado sin fecha sale en "Sin fecha de cierre".
 
 ---
 

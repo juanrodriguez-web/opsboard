@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
-  listProyectoComments, addProyectoComment as apiAddProyectoComment, listItemComments, addItemComment, importItemComments, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
+  listProyectoComments, addProyectoComment as apiAddProyectoComment, listItemComments, addItemComment, importItemComments, deleteProyecto as apiDeleteProyecto, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   addRelation as apiAddRelation, removeRelation as apiRemoveRelation,
   getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress, listPeople, updatePersonCapacity, listMailCandidates, decideMailCandidate,
   BACKEND,
@@ -1278,8 +1278,11 @@ const ModalUnificar = ({ tipo, item, allItems, onClose, onUnify, lang='es' }) =>
 }
 
 // ── ProjectDetailView (Nueva vista detallada de proyecto) ──────────────────────
-const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
+const ProjectDetailView = ({ proyecto, allItems, onClose, onSave, onDelete }) => {
   const [tabActive, setTabActive] = useState('resumen')
+  const [delConfirm, setDelConfirm] = useState(false)
+  const [delBusy, setDelBusy] = useState(false)
+  const [delErr, setDelErr] = useState('')
   const [hitos, setHitos] = useState([])
   const [comentarios, setComentarios] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1393,8 +1396,18 @@ const ProjectDetailView = ({ proyecto, allItems, onClose, onSave }) => {
           <button onClick={moverAlBacklog} title="Mover al Backlog" style={{ padding:'6px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:'1px solid #cbd5e1', background:'#f1f5f9', color:'#475569', cursor:'pointer' }}>
             ⊞ Backlog
           </button>
+          {onDelete && <button onClick={() => { setDelConfirm(true); setDelErr('') }} title="Eliminar proyecto" style={{ padding:'6px 12px', borderRadius:6, fontSize:12, fontWeight:600, border:'1px solid #f43f5e55', background:'transparent', color:'#f43f5e', cursor:'pointer' }}>🗑 Eliminar</button>}
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:C.muted }}>✕</button>
         </div>
+        {delConfirm && (
+          <div role="alertdialog" style={{ padding:'12px 24px', background:'#f43f5e14', borderBottom:`1px solid ${C.border}`, display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, fontSize:12.5, color:C.text }}>
+            <span style={{ flex:'1 1 320px' }}>¿Eliminar «{proyecto.nombre}» para siempre? Se borran sus {hitos.length} hito(s) y sus comentarios; sus {temas.length} tema(s) <b>no se borran</b>: quedan sin proyecto.</span>
+            <button disabled={delBusy} onClick={async () => { setDelBusy(true); setDelErr(''); try { await onDelete(proyecto.id); onClose() } catch (e) { setDelErr('No se pudo eliminar: ' + (e.message || e)) } setDelBusy(false) }}
+              style={{ background:'#f43f5e', border:'none', color:'#fff', borderRadius:6, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', opacity:delBusy?0.6:1 }}>{delBusy ? 'Eliminando…' : 'Sí, eliminar'}</button>
+            <button disabled={delBusy} onClick={() => setDelConfirm(false)} style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'6px 12px', fontSize:12, cursor:'pointer' }}>No</button>
+            {delErr && <div role="alert" style={{ flexBasis:'100%', color:'#f43f5e' }}>{delErr}</div>}
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ display:'flex', gap:1, padding:'0 24px', borderBottom:`1px solid ${C.border}`, background:C.surface }}>
@@ -1613,7 +1626,7 @@ const NuevoProyecto = ({ proyectos, onCreate, onToast }) => {
   )
 }
 
-const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onItemChange, onCreateProject, onToast, lang='es' }) => {
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onItemChange, onCreateProject, onDeleteProject, onToast, lang='es' }) => {
   const [filtSt,              setFiltSt]              = useState('all')
   const [showSinProyecto,     setShowSinProyecto]     = useState(false)
   const [showBacklog,         setShowBacklog]         = useState(false)
@@ -2055,6 +2068,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onItemChange, o
           allItems={allItems}
           onClose={() => setModalProy(null)}
           onSave={() => { setModalProy(null) }}
+          onDelete={onDeleteProject}
         />
       )}
     </div>
@@ -3979,6 +3993,12 @@ export default function OpsBoard() {
       setToast('Tema eliminado')
     } catch (e) { setToast('No se pudo eliminar: ' + (e.message || e)) }
   }
+  const deleteProject = async id => {
+    await apiDeleteProyecto(id)
+    const all = await loadAll()
+    setProyectos(all.proyectos); setItems(all.items)             // its topics lose the project: reload both
+    setToast('Proyecto eliminado; sus temas quedan sin proyecto')
+  }
   const createProjectFromMail = async row => { await insertProyectoRows([row]); const all = await loadAll(); setProyectos(all.proyectos) }
 
   // Cambios desde Portfolio / Project Overview: se refleja al instante y se revierte si falla el guardado.
@@ -4205,7 +4225,7 @@ export default function OpsBoard() {
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
               {vista === '✉️ Backlog Mail'    && <BacklogMailView supported={BACKEND === 'pm'} projectNames={proyectos.map(p => p.nombre)} onCreateTopic={createTopicFromMail} onCreateProject={createProjectFromMail} onCount={setMailPending} newId={uid} ui={{ C }} api={{ listMailCandidates, decideMailCandidate }} />}
               {vista === '👥 Workload'        && <WorkloadView items={allItems} supported={BACKEND === 'pm'} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} ui={{ C, Tag, fmtFecha }} api={{ listPeople, updatePersonCapacity }} />}
-              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} onAddTema={addItem} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} onCreateProject={BACKEND === 'pm' ? createProjectFromMail : undefined} onToast={msg => setToast(msg)} lang={lang} />}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} onAddTema={addItem} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} onCreateProject={BACKEND === 'pm' ? createProjectFromMail : undefined} onDeleteProject={BACKEND === 'pm' ? deleteProject : undefined} onToast={msg => setToast(msg)} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}
               {vista === '☰ Lista'            && <ListaView items={allItems} me={me} owners={KNOWN_OWNERS} projectNames={proyectos.map(p => p.nombre)} onItemChange={onItemChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, priColor, fmtFecha }} api={{ listSavedViews, saveSavedView, deleteSavedView }} />}

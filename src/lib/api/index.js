@@ -20,7 +20,7 @@ export const loadAll = BACKEND === 'pm' ? api.loadAll : async () => {
 export const {
   insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows,
-  listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment, listItemComments, addItemComment, importItemComments,
+  listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment, listItemComments, addItemComment, importItemComments, deleteProyecto,
   listPlanAccion, listCampanas, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
   listRelations, addRelation, removeRelation,
   getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, listChecklistProgress,

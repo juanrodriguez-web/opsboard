@@ -391,5 +391,18 @@ rec('projects never updated keep health not_set and empty text', (await api.list
   rec('imported comments show up in the topic, ordered by their original date', (await api.listItemComments(a.id)).map(x => x.text).join('|') === 'Segundo|Primer comentario|Viejo 1')
 }
 
+// ── 14. delete a project ──
+{
+  await api.insertProyectoRows([{ id: 'pro-del', nombre: 'Proyecto a borrar', descripcion: '', propietario: '', prioridad: '', status: 'pending' }])
+  await api.addHito({ id: 'hit-del', proyecto_id: 'pro-del', nombre: 'Hito del proyecto', fecha_prevista: '2026-12-01', orden: 0 })
+  await api.insertItems([{ id: 'itm-del', tema: 'Tema que sobrevive', objetivo: '', category: 'projects', propietario: '', prioridad: '', risk: 'green', status: 'pending', estadoSheet: 'No iniciado', fechaInicio: null, fechaFin: null, archivos: '', notas: '', proyecto: 'Proyecto a borrar', subtareas: [] }])
+  const pre = (await api.listItems()).find(i => i.id === 'itm-del')
+  const res = await api.deleteProyecto('pro-del')
+  const post = (await api.listItems()).find(i => i.id === 'itm-del')
+  rec('deleteProyecto: project and its milestone are gone, the topic survives without project', pre.proyecto === 'Proyecto a borrar' && res.milestones === 1 && res.topics === 1 && !tables.projects.some(p => p.legacy_id === 'pro-del') && !tables.work_items.some(w => w.legacy_id === 'hit-del') && !!post && post.proyecto === '', JSON.stringify({ res, post: post?.proyecto }))
+  let threw = false; try { await api.deleteProyecto('no-existe') } catch { threw = true }
+  rec('deleteProyecto on an unknown project fails', threw)
+}
+
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)

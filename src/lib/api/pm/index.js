@@ -315,6 +315,21 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     return data?.[0] ? commentToApp(data[0], row.proyecto_id) : undefined
   }
 
+  // ── delete a project ───────────────────────────────────────────
+  // Milestones belong to the project and are deleted with it; topics (and their subtasks) are kept and simply lose the project.
+  // Project comments go by cascade. Returns { milestones, topics } with what was affected.
+  async function deleteProyecto(proyectoId) {
+    const pid = await projectUuid(proyectoId)
+    const rows = unwrap(await client.from('work_items').select('id, type').eq('project_id', pid)) || []
+    const milestones = rows.filter(r => r.type === 'milestone').length
+    if (milestones) unwrap(await client.from('work_items').delete().eq('project_id', pid).eq('type', 'milestone'))
+    const topics = rows.length - milestones
+    if (topics) unwrap(await client.from('work_items').update({ project_id: null }).eq('project_id', pid))
+    unwrap(await client.from('projects').delete().eq('id', pid))
+    refs = null
+    return { milestones, topics }
+  }
+
   // ── topic comments (replace the browser-only obs-comments) ─────
   async function listItemComments(itemId) {
     const it = await resolveItem(itemId)
@@ -498,7 +513,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
   return {
     loadAll, listItems, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
     listProyectos, updateProyecto, insertProyectoRows,
-    listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment, listItemComments, addItemComment, importItemComments,
+    listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment, listItemComments, addItemComment, importItemComments, deleteProyecto,
     listCampanas, listPlanAccion, findPersonByEmail,
     listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation,
     listPeople, updatePersonCapacity, listMailCandidates, insertMailCandidates, decideMailCandidate,
