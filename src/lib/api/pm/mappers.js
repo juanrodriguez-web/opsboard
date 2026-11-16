@@ -69,6 +69,7 @@ export function workToItem(w, refs, children = null) {
     archivos: legacy.archivos || '',
     notas: w.notes || '',
     estimateH: w.estimate_h === null || w.estimate_h === undefined ? null : Number(w.estimate_h),
+    completedAt: w.completed_at || null,                  // set by the DB trigger when the topic reaches a DONE status (drives Histórico)
     proyecto: refs.projectById.get(w.project_id)?.name || legacy.proyecto || '',
     subtareas: children && children.length ? children.map(c => childToSubtask(c, refs)) : (Array.isArray(w.legacy_subtareas) ? w.legacy_subtareas : []),
     created_at: w.created_at,

@@ -17,7 +17,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { parseSheetValues, buildItems, parseCampanas, parseProyectos, norm, mapRisk } from './parser.js'
+import { norm, mapRisk } from './parser.js'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
@@ -48,9 +48,6 @@ const C = {
 }
 const OV_KEY           = 'obs-status-overrides'
 const COMMENTS_KEY     = 'obs-comments'
-const PROJ_COMMENTS_KEY = 'obs-proj-comments'
-const PROY_OV_KEY       = 'obs-proy-overrides'
-const DONE_TS_KEY       = id => `obs-done-ts-${id}`
 const LOCAL_ITEMS_KEY  = 'obs-local-items'
 
 // Owner colors
@@ -119,11 +116,9 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } cat
 
 const getOverrides = ()          => lsGet(OV_KEY, {})
 const saveOverride     = (k, fields)     => { const ov = getOverrides(); ov[k] = { ...(ov[k]||{}), ...fields, ts:new Date().toISOString() }; lsSet(OV_KEY, ov) }
-const getProyOverrides = ()              => lsGet(PROY_OV_KEY, {})
-const saveProyOverride = (nombre, flds) => { const ov = getProyOverrides(); const nk = norm(nombre); ov[nk] = {...(ov[nk]||{}), ...flds}; lsSet(PROY_OV_KEY, ov) }
-const saveDoneTs       = id             => { try { if (!localStorage.getItem(DONE_TS_KEY(id))) localStorage.setItem(DONE_TS_KEY(id), Date.now().toString()) } catch {} }
-const getDoneTs        = id             => { try { return parseInt(localStorage.getItem(DONE_TS_KEY(id)) || '0') } catch { return 0 } }
-const isArchived       = item           => item.status === 'done' && getDoneTs(item.id) > 0 && (Date.now() - getDoneTs(item.id)) > 7 * 86400000
+const doneMs           = item           => (item.completedAt ? new Date(item.completedAt).getTime() : 0)
+// Archived = done for more than 7 days (completed_at from the DB); done items without a date (old data) go straight to Histórico
+const isArchived       = item           => item.status === 'done' && (!doneMs(item) || (Date.now() - doneMs(item)) > 7 * 86400000)
 const getComments  = k           => (lsGet(COMMENTS_KEY, []) || []).filter(c => c.k === k)
 const saveComment  = (k, text)   => {
   const all = lsGet(COMMENTS_KEY, []) || []
@@ -133,16 +128,6 @@ const saveComment  = (k, text)   => {
   lsSet(COMMENTS_KEY, [item, ...all].slice(0, 300))
   return item
 }
-const getProjectComments = k         => (lsGet(PROJ_COMMENTS_KEY, []) || []).filter(c => c.k === k)
-const saveProjectComment = (k, text) => {
-  const all = lsGet(PROJ_COMMENTS_KEY, []) || []
-  const now = new Date()
-  const ts  = `${pad(now.getDate())}/${pad(now.getMonth()+1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`
-  const item = { k, ts, text, id:uid(), iso:now.toISOString() }
-  lsSet(PROJ_COMMENTS_KEY, [item, ...all].slice(0, 300))
-  return item
-}
-
 // Fire-and-forget email notification when a task is assigned to Juan or Fran
 async function notifyAssignment({ tema, propietario, descripcion = '', categoria = '', prioridad = '' }) {
   if (!propietario) return
@@ -286,9 +271,6 @@ const Tarjeta = ({ item, onClick, onNextSt, onUnify, isBlockedByDep = false, che
         )}
         {isBlockedByDep && (
           <span title="Depende de un tema sin completar" style={{ fontSize:10, fontWeight:600, color:'#b45309', background:'#fef3c7', borderRadius:4, padding:'1px 5px' }}>🔒 bloqueado</span>
-        )}
-        {item._hasLocal && (
-          <span title="Cambios locales pendientes" style={{ fontFamily:"'Geist Mono',monospace", fontSize:9, color:'#a8a39a', border:'1px solid #e8e5df', borderRadius:4, padding:'1px 4px', letterSpacing:'.02em' }}>~local</span>
         )}
         {item.prioridad && (
           <span style={{ fontFamily:"'Geist Mono',monospace", fontSize:9.5, fontWeight:500, color:pc.color, background:pc.bg, border:`1px solid ${pc.bd||pc.bg}`, borderRadius:5, padding:'1px 5px' }}>
@@ -1108,361 +1090,6 @@ const GanttChart = ({ temas }) => {
   )
 }
 
-// ── ModalProyecto ─────────────────────────────────────────────────────────────
-const ModalProyecto = ({ proyecto: proyectoOrig, allItems, onClose, onAddTema, onOpenItem, onUpdate, lang='es' }) => {
-  const [proyecto,     setProyecto]     = useState(proyectoOrig)
-  const [tab,          setTab]          = useState('temas')
-  const [nc,           setNc]           = useState('')
-  const [comments,     setComments]     = useState(() => getProjectComments(norm(proyectoOrig.nombre)))
-  const [showAddTema,  setShowAddTema]  = useState(false)
-  const [newTema,      setNewTema]      = useState('')
-  const [newTemaObj,   setNewTemaObj]   = useState('')
-  const [newTemaCat,   setNewTemaCat]   = useState('projects')
-  const [newTemaProp,  setNewTemaProp]  = useState(proyectoOrig.propietario || '')
-  const [editing,      setEditing]      = useState(false)
-  const [editDesc,     setEditDesc]     = useState(proyectoOrig.descripcion || '')
-  const [editProp,     setEditProp]     = useState(proyectoOrig.propietario || '')
-  const [editIni,      setEditIni]      = useState(proyectoOrig.fechaInicio ? fdStr(proyectoOrig.fechaInicio) : '')
-  const [editFin,      setEditFin]      = useState(proyectoOrig.fechaFin ? fdStr(proyectoOrig.fechaFin) : '')
-  const [editPrio,     setEditPrio]     = useState(proyectoOrig.prioridad || '')
-  const [editStatus,     setEditStatus]     = useState(proyectoOrig.status || 'pending')
-  const [editDesarrollo, setEditDesarrollo] = useState(proyectoOrig.desarrollo || '')
-  const [editFase,       setEditFase]       = useState(proyectoOrig.fase || '')
-  const [editCapex,      setEditCapex]      = useState(proyectoOrig.capex!=null?String(proyectoOrig.capex):'')
-  const [editNombreEN,   setEditNombreEN]   = useState(proyectoOrig.nombreEN || '')
-  const [w,            setW]            = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
-  const isMobile = w < 768
-
-  useEffect(() => {
-    const h = () => setW(window.innerWidth)
-    window.addEventListener('resize', h)
-    return () => window.removeEventListener('resize', h)
-  }, [])
-
-  useEffect(() => {
-    const h = e => e.key === 'Escape' && (editing ? setEditing(false) : onClose())
-    document.addEventListener('keydown', h)
-    return () => document.removeEventListener('keydown', h)
-  }, [editing])
-
-  const guardarEdicion = () => {
-    const flds = { descripcion:editDesc.trim(), propietario:editProp.trim(), fechaInicio:editIni||null, fechaFin:editFin||null, prioridad:editPrio, status:editStatus,
-      desarrollo:editDesarrollo.trim(), fase:editFase, capex:editCapex?parseFloat(editCapex)||null:null, nombreEN:editNombreEN.trim() }
-    saveProyOverride(proyecto.nombre, flds)
-    const updated = { ...proyecto, ...flds, _hasLocalProy:true }
-    setProyecto(updated)
-    onUpdate?.(proyecto.nombre, flds)
-    setEditing(false)
-  }
-
-  const temas   = allItems.filter(i => norm(i.proyecto || '') === norm(proyecto.nombre))
-  const done    = temas.filter(t => t.status === 'done').length
-  const blocked = temas.filter(t => t.status === 'blocked').length
-  const pct     = temas.length > 0 ? Math.round(done / temas.length * 100) : 0
-  const oc      = ownerColor(proyecto.propietario)
-
-  const agregarComentario = () => {
-    const text = nc.trim()
-    if (!text) return
-    const c = saveProjectComment(norm(proyecto.nombre), text)
-    setComments(prev => [c, ...prev])
-    setNc('')
-  }
-
-  const crearTema = () => {
-    if (!newTema.trim()) return
-    onAddTema({
-      id: uid(), tema: newTema.trim(), objetivo: newTemaObj.trim(),
-      category: newTemaCat, propietario: newTemaProp.trim(),
-      prioridad: '', risk: 'green', status: 'pending',
-      estadoSheet: 'No iniciado', fechaInicio: null,
-      fechaFin: proyecto.fechaFin || null,
-      proyecto: proyecto.nombre, archivos: '',
-      notas: 'Creado desde panel de proyecto', subtareas: [], _local: true,
-    })
-    setNewTema(''); setNewTemaObj(''); setShowAddTema(false)
-  }
-
-  const TABS = [
-    { id:'temas',  l:`Temas (${temas.length})` },
-    { id:'gantt',  l:'Gantt' },
-    { id:'notas',  l:`Notas${comments.length > 0 ? ` (${comments.length})` : ''}` },
-  ]
-
-  const inputSt = { background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'7px 10px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'#00000099', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:isMobile?8:16, overflowY:'auto' }}
-      onClick={e => e.target===e.currentTarget&&onClose()}>
-      <style>{`
-        @keyframes modalProjIn{from{opacity:0;transform:scale(0.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-        @keyframes rowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        .modal-tab-btn{transition:color 150ms ease-out,border-color 150ms ease-out!important}
-        .add-tema-btn{transition:border-color 150ms ease-out,color 150ms ease-out!important}
-        .add-tema-btn:hover{border-color:#e8243b!important;color:#e8243b!important}
-      `}</style>
-      <div style={{
-        background:C.surface, borderRadius:isMobile?12:14, border:`1px solid ${C.border}`,
-        width:'100%', maxWidth:isMobile?'100%':800, maxHeight:isMobile?'100vh':'91vh', overflow:'hidden',
-        display:'flex', flexDirection:'column',
-        animation:'modalProjIn 220ms cubic-bezier(0.23,1,0.32,1) both',
-        boxShadow:'0 8px 40px rgba(0,0,0,.15)',
-        margin:isMobile?'auto 0':undefined,
-      }}>
-        {/* Header */}
-        <div style={{ padding:isMobile?'12px 14px 10px':'16px 20px 14px', borderBottom:`1px solid ${C.border}`, background:C.card, overflowY:'auto', maxHeight:isMobile?'40vh':'none' }}>
-          <div style={{ display:'flex', alignItems:'flex-start', gap:isMobile?8:12 }}>
-            <div style={{ flex:1 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5, flexWrap:'wrap' }}>
-                <span style={{ fontSize:16, fontWeight:700, color:C.text, lineHeight:1.2 }}>{proyecto.nombre}</span>
-                {!editing && <Tag id={proyecto.status} type="st" />}
-                {!editing && proyecto.prioridad && (() => { const pc=priColor(proyecto.prioridad); return <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3, background:pc.bg, color:pc.color }}>{proyecto.prioridad}</span> })()}
-                {proyecto._hasLocalProy && <span style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411', border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>~local</span>}
-                {!editing && proyecto.desarrollo && (() => { const vf=norm(proyecto.desarrollo)==='vodafone'; return <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:3, background:vf?'#e8001c18':'#1a5fe318', color:vf?'#b30016':'#1244a8' }}>{proyecto.desarrollo}</span> })()}
-              </div>
-              {!editing && (proyecto.descripcion
-                ? <p style={{ fontSize:12, color:C.muted, lineHeight:1.6, margin:'4px 0 0' }}>{proyecto.descripcion}</p>
-                : <p style={{ fontSize:12, color:C.border, lineHeight:1.6, margin:'4px 0 0', fontStyle:'italic' }}>Sin descripción</p>)}
-              {!editing && proyecto.fase && (() => {
-                const curPct = fasePct(proyecto.fase)
-                return (
-                  <div style={{ marginTop:8 }}>
-                    <div style={{ display:'flex', gap:2, marginBottom:3 }}>
-                      {FASES.map(f => {
-                        const active = norm(f.id)===norm(proyecto.fase)
-                        const done   = f.pct <= curPct
-                        return (
-                          <div key={f.id} style={{ flex:1 }}>
-                            <div style={{ height:4, borderRadius:2, background:active?C.accent:done?C.accent+'55':C.border, marginBottom:2 }} />
-                            <span style={{ fontSize:8, color:active?C.accent:C.muted, fontWeight:active?700:400, whiteSpace:'nowrap' }}>{lang==='en'?f.labelEN:f.label}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    <div style={{ fontSize:10, color:C.muted, textAlign:'right', marginTop:2 }}>Avance estimado: <strong style={{ color:C.accent }}>{curPct}%</strong></div>
-                  </div>
-                )
-              })()}
-            </div>
-            <div style={{ display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
-              {!editing
-                ? <button onClick={() => setEditing(true)} style={{ background:C.surface, border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:11, fontWeight:600, cursor:'pointer' }}>Editar</button>
-                : <>
-                    <button onClick={guardarEdicion} style={{ background:C.accent, border:'none', color:'#fff', borderRadius:6, padding:'4px 12px', fontSize:11, fontWeight:600, cursor:'pointer' }}>Guardar</button>
-                    <button onClick={() => setEditing(false)} style={{ background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:6, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-                  </>}
-              <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, padding:0, lineHeight:1 }}>✕</button>
-            </div>
-          </div>
-
-          {/* Edit form */}
-          {editing && (() => {
-            const iSt = { background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 9px', fontSize:12, outline:'none', width:'100%', boxSizing:'border-box' }
-            return (
-              <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:8 }}>
-                <div>
-                  <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Descripción</div>
-                  <textarea value={editDesc} onChange={e=>setEditDesc(e.target.value)} rows={2} placeholder="Descripción del proyecto…" style={{ ...iSt, resize:'vertical', fontFamily:'inherit' }} />
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8 }}>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Desarrollo</div>
-                    <select value={editDesarrollo} onChange={e=>setEditDesarrollo(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
-                      <option value="">—</option>
-                      <option value="Vodafone">Vodafone</option>
-                      <option value="Sercom">Sercom</option>
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fase</div>
-                    <select value={editFase} onChange={e=>setEditFase(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
-                      <option value="">—</option>
-                      <option value="TO DO">TO DO</option>
-                      {FASES.map(f=><option key={f.id} value={f.id}>{f.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>CAPEX (€)</div>
-                    <input type="number" value={editCapex} onChange={e=>setEditCapex(e.target.value)} style={iSt} placeholder="0" min="0" step="1000" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Nombre EN</div>
-                    <input value={editNombreEN} onChange={e=>setEditNombreEN(e.target.value)} style={iSt} placeholder="English name…" />
-                  </div>
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8 }}>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Responsable</div>
-                    <input list="owners-proy-edit" value={editProp} onChange={e=>setEditProp(e.target.value)} style={iSt} placeholder="Nombre…" />
-                    <datalist id="owners-proy-edit">{KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}</datalist>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Estado</div>
-                    <select value={editStatus} onChange={e=>setEditStatus(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
-                      {ST.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Prioridad</div>
-                    <select value={editPrio} onChange={e=>setEditPrio(e.target.value)} style={{ ...iSt, cursor:'pointer' }}>
-                      <option value="">Sin prioridad</option>
-                      {PRIORIDADES.filter(Boolean).map(p=><option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fecha inicio</div>
-                    <input type="date" value={editIni} onChange={e=>setEditIni(e.target.value)} style={{ ...iSt, colorScheme:'light' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', marginBottom:3 }}>Fecha fin</div>
-                    <input type="date" value={editFin} onChange={e=>setEditFin(e.target.value)} style={{ ...iSt, colorScheme:'light' }} />
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* Meta row */}
-          {!editing && (
-          <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:10, flexWrap:'wrap' }}>
-            {proyecto.propietario && (
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <div style={{ width:20, height:20, borderRadius:'50%', background:oc, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:'#fff' }}>{iniciales(proyecto.propietario)}</div>
-                <span style={{ fontSize:12, color:C.muted }}>{proyecto.propietario.split(' ')[0]}</span>
-              </div>
-            )}
-            {proyecto.fechaInicio && <span style={{ fontSize:11, color:C.muted }}>Inicio: {fmtFecha(fdStr(proyecto.fechaInicio))}</span>}
-            {proyecto.fechaFin && <span style={{ fontSize:11, color:C.muted }}>Fin: <AlertFecha endDate={proyecto.fechaFin} status={proyecto.status} /></span>}
-            {proyecto.capex!=null && <span style={{ fontSize:11, color:C.muted }}>CAPEX: <strong style={{ color:C.text }}>{Number(proyecto.capex).toLocaleString('es')} €</strong></span>}
-            {lang==='en' && proyecto.nombreEN && <span style={{ fontSize:10, color:C.muted, fontStyle:'italic' }}>{proyecto.nombreEN}</span>}
-            <span style={{ fontSize:11, color:C.muted, marginLeft:'auto' }}>
-              {temas.length} tema{temas.length!==1?'s':''} · {done} completado{done!==1?'s':''}
-              {blocked>0&&<span style={{ color:'#f43f5e' }}> · {blocked} bloq.</span>}
-            </span>
-          </div>
-          )}
-
-          {/* Progress bar */}
-          {temas.length > 0 && (
-            <div style={{ marginTop:10 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                <div style={{ display:'flex', gap:8 }}>
-                  {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; return n?<span key={s.id} style={{ fontSize:9, color:s.color, fontWeight:600 }}>{n} {s.label}</span>:null })}
-                </div>
-                <span style={{ fontSize:10, fontWeight:700, color:C.accent }}>{pct}%</span>
-              </div>
-              <div style={{ height:5, background:C.bg, borderRadius:3, overflow:'hidden', display:'flex', gap:1 }}>
-                {ST.map(s => { const n=temas.filter(t=>t.status===s.id).length; const w=temas.length>0?n/temas.length*100:0; return w>0?<div key={s.id} style={{ width:`${w}%`, background:s.color, transition:'width .5s cubic-bezier(0.23,1,0.32,1)' }}/>:null })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display:'flex', borderBottom:`1px solid ${C.border}`, padding:'0 20px', background:C.surface }}>
-          {TABS.map(t => {
-            const on = tab === t.id
-            return (
-              <button key={t.id} className="modal-tab-btn" onClick={() => setTab(t.id)}
-                style={{ padding:'10px 16px', background:'none', border:'none', borderBottom:`2px solid ${on?C.accent:'transparent'}`, fontSize:12, fontWeight:on?700:500, color:on?C.accent:C.muted, cursor:'pointer' }}>
-                {t.l}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Tab content */}
-        <div style={{ flex:1, overflowY:'auto', padding:20 }}>
-
-          {/* ── TEMAS ── */}
-          {tab === 'temas' && (
-            <div>
-              {temas.length === 0 && !showAddTema && (
-                <div style={{ textAlign:'center', color:C.muted, padding:'28px 0 20px', fontSize:13 }}>Sin temas vinculados todavía.</div>
-              )}
-              {temas.map((t, i) => {
-                const st  = ST.find(s => s.id === t.status)
-                const cat = CATS.find(c => c.id === t.category)
-                return (
-                  <div key={t.id}
-                    onClick={() => onOpenItem?.(t)}
-                    style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px', background:C.card, borderRadius:7, marginBottom:6, border:`1px solid ${C.border}`, borderLeft:`3px solid ${cat?.color||C.muted}`, animation:`rowIn 240ms cubic-bezier(0.23,1,0.32,1) ${i*35}ms both`, cursor:onOpenItem?'pointer':'default', transition:'background 120ms ease-out' }}
-                    onMouseEnter={e => onOpenItem && (e.currentTarget.style.background=C.surface)}
-                    onMouseLeave={e => onOpenItem && (e.currentTarget.style.background=C.card)}>
-                    <Dot risk={t.risk} />
-                    <span style={{ flex:1, fontSize:13, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.tema}</span>
-                    <Tag id={t.category} type="cat" />
-                    <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:st?.color+'22', color:st?.color, flexShrink:0 }}>{st?.label}</span>
-                    <span style={{ fontSize:10, color:C.muted, flexShrink:0, minWidth:36 }}>{(t.propietario||'').split(' ')[0]||'—'}</span>
-                    {t.fechaFin && <AlertFecha endDate={t.fechaFin} status={t.status} />}
-                    {onOpenItem && <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>↗</span>}
-                  </div>
-                )
-              })}
-
-              {/* Inline add form */}
-              {showAddTema ? (
-                <div style={{ background:C.card, border:`1px solid ${C.accent}55`, borderRadius:8, padding:14, marginTop:6 }}>
-                  <input value={newTema} onChange={e=>setNewTema(e.target.value)} placeholder="Nombre del tema…" autoFocus
-                    onKeyDown={e=>e.key==='Enter'&&crearTema()}
-                    style={{ ...inputSt, marginBottom:8 }} />
-                  <TA value={newTemaObj} onChange={setNewTemaObj} placeholder="Objetivo (opcional)…" rows={2} style={{ marginBottom:8 }} />
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
-                    <div>
-                      <Lbl>Categoría</Lbl>
-                      <Sel value={newTemaCat} onChange={setNewTemaCat} opts={CATS.map(c=>({v:c.id,l:c.label}))} style={{ width:'100%' }} />
-                    </div>
-                    <div>
-                      <Lbl>Propietario</Lbl>
-                      <input list="owners-modal-proy" value={newTemaProp} onChange={e=>setNewTemaProp(e.target.value)} placeholder="Nombre…" style={inputSt} />
-                      <datalist id="owners-modal-proy">{KNOWN_OWNERS.map(o=><option key={o} value={o}/>)}</datalist>
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <Btn onClick={crearTema} disabled={!newTema.trim()} style={{ fontSize:12, padding:'6px 14px' }}>➕ Crear tema</Btn>
-                    <Btn v="sec" onClick={() => { setShowAddTema(false); setNewTema(''); setNewTemaObj('') }} style={{ fontSize:12, padding:'6px 14px' }}>Cancelar</Btn>
-                  </div>
-                </div>
-              ) : (
-                <button className="add-tema-btn" onClick={() => setShowAddTema(true)}
-                  style={{ display:'flex', alignItems:'center', gap:6, width:'100%', background:'transparent', border:`1.5px dashed ${C.border}`, borderRadius:7, padding:'9px 12px', cursor:'pointer', color:C.muted, fontSize:12, marginTop:8, outline:'none' }}>
-                  ＋ Añadir tema al proyecto
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* ── GANTT ── */}
-          {tab === 'gantt' && <GanttChart temas={temas} />}
-
-          {/* ── NOTAS ── */}
-          {tab === 'notas' && (
-            <div>
-              <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:18 }}>
-                <TA value={nc} onChange={setNc} placeholder="Añade una nota o actualización del proyecto…" rows={3}
-                  onKeyDown={e=>{ if(e.ctrlKey&&e.key==='Enter'){ agregarComentario(); e.preventDefault() } }} />
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <Btn onClick={agregarComentario} disabled={!nc.trim()} style={{ fontSize:12, padding:'6px 14px' }}>💬 Guardar nota</Btn>
-                  <span style={{ fontSize:11, color:C.muted }}>Ctrl+Enter</span>
-                </div>
-              </div>
-              {comments.length === 0
-                ? <div style={{ textAlign:'center', color:C.muted, padding:'24px 0', fontSize:12 }}>Sin notas todavía.</div>
-                : comments.map((c, i) => (
-                  <div key={c.id} style={{ background:C.card, borderRadius:7, padding:'10px 14px', marginBottom:8, borderLeft:`3px solid ${C.accent}`, animation:`rowIn 200ms ease-out ${i*25}ms both` }}>
-                    <div style={{ fontSize:10, color:C.accent, fontWeight:700, marginBottom:4 }}>[{c.ts}]</div>
-                    <div style={{ fontSize:13, color:C.text, lineHeight:1.6, whiteSpace:'pre-wrap' }}>{c.text}</div>
-                  </div>
-                ))
-              }
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Modal de Unificación ────────────────────────────────────────────────────────
 const ModalUnificar = ({ tipo, item, allItems, onClose, onUnify, lang='es' }) => {
   const [destino, setDestino] = useState(null)
@@ -1977,7 +1604,7 @@ const NuevoProyecto = ({ proyectos, onCreate, onToast }) => {
   )
 }
 
-const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onItemChange, onCreateProject, onToast, lang='es' }) => {
+const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onItemChange, onCreateProject, onToast, lang='es' }) => {
   const [filtSt,              setFiltSt]              = useState('all')
   const [showSinProyecto,     setShowSinProyecto]     = useState(false)
   const [showBacklog,         setShowBacklog]         = useState(false)
@@ -2016,7 +1643,7 @@ const Proyectos = ({ proyectos, allItems, onAddTema, onOpenItem, onUpdate, onIte
         <div style={{ fontSize:36, marginBottom:12 }}>🗂️</div>
         <h3 style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:8 }}>No hay proyectos todavía</h3>
         <p style={{ fontSize:13, color:C.muted, lineHeight:1.7, marginBottom:14 }}>
-          Crea el primero con el botón de abajo, o pulsa <b style={{ color:C.text }}>⬆ Migrar Proyectos</b> arriba para importar los del Sheet.
+          Crea el primero con el botón de abajo.
         </p>
         {onCreateProject && <NuevoProyecto proyectos={proyectos} onCreate={onCreateProject} onToast={onToast} />}
       </div>
@@ -2440,7 +2067,7 @@ const _similarity = (a, b) => {
 
 const findSimilar = (title, existingItems) =>
   existingItems
-    .filter(i => i.status !== 'done' && !i._deleted)
+    .filter(i => i.status !== 'done')
     .map(i => ({ item:i, score:_similarity(title, i.tema) }))
     .filter(x => x.score >= 0.38)
     .sort((a,b) => b.score - a.score)
@@ -2865,13 +2492,14 @@ const Historico = ({ items }) => {
     const mq = !q || norm(i.tema).includes(norm(q)) || norm(i.propietario||'').includes(norm(q))
     const mp = !prioF || i.prioridad === prioF
     return mq && mp
-  }).sort((a,b) => getDoneTs(b.id) - getDoneTs(a.id))
+  }).sort((a,b) => doneMs(b) - doneMs(a))
 
   const byMonth = {}
   filtered.forEach(i => {
-    const d   = new Date(getDoneTs(i.id))
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
-    const lbl = d.toLocaleString('es', { month:'long', year:'numeric' })
+    const d   = new Date(doneMs(i))
+    const hasDate = doneMs(i) > 0
+    const key = hasDate ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '0000-sin-fecha'
+    const lbl = hasDate ? d.toLocaleString('es', { month:'long', year:'numeric' }) : 'Sin fecha de cierre'
     if (!byMonth[key]) byMonth[key] = { lbl, items:[] }
     byMonth[key].items.push(i)
   })
@@ -2912,7 +2540,7 @@ const Historico = ({ items }) => {
             {byMonth[key].items.map(item => {
               const pc = priColor(item.prioridad)
               const oc = ownerColor(item.propietario)
-              const doneDate = new Date(getDoneTs(item.id)).toLocaleDateString('es', { day:'numeric', month:'short' })
+              const doneDate = doneMs(item) > 0 ? new Date(doneMs(item)).toLocaleDateString('es', { day:'numeric', month:'short' }) : '—'
               return (
                 <div key={item.id} style={{ display:'flex', alignItems:'center', gap:isMobile?6:10, background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:isMobile?'6px 10px':'8px 12px', opacity:0.85 }}>
                   <div style={{ width:14, height:14, borderRadius:'50%', background:'#10b98122', border:'1.5px solid #10b981', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, color:'#10b981', flexShrink:0 }}>✓</div>
@@ -3519,7 +3147,7 @@ const DepsSection = ({ item, relations, allItems, onAdd, onRemove }) => {
     { key: 'blocks',    title: 'Bloquea a',     rows: rows.filter(r => r.kind === 'blocks' && r.fromId === item.id), other: r => r.toId },
     { key: 'related',   title: 'Relacionado con', rows: rows.filter(r => r.kind === 'related'), other: r => (r.fromId === item.id ? r.toId : r.fromId) },
   ]
-  const cands = candidatesFor(item.id, kind === 'related' ? 'related' : 'blocks', kind, relations, allItems.filter(i => !i._deleted))
+  const cands = candidatesFor(item.id, kind === 'related' ? 'related' : 'blocks', kind, relations, allItems)
     .sort((a, b) => String(a.tema).localeCompare(String(b.tema), 'es'))
   const add = async () => {
     if (!pick) return
@@ -3615,8 +3243,7 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
       subtareas,
     }
     onItemChange(item.id, fields)
-    if (eSt === 'done') saveDoneTs(item.id)
-    const updated = { ...item, ...fields, _hasLocal: true }
+    const updated = { ...item, ...fields }
     setItem(updated)
     onItemChange(item.id, fields, true)
     setEditing(false)
@@ -3676,8 +3303,6 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                   background:stInfo.color+'22', color:stInfo.color, textTransform:'uppercase' }}>{stInfo.label}</span>}
                 {item.prioridad && <span style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:3,
                   background:pc.bg, color:pc.color }}>{item.prioridad}</span>}
-                {item._hasLocal && <span style={{ fontSize:9, color:'#fbbf24', background:'#fbbf2411',
-                  border:'1px solid #fbbf2433', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>~local</span>}
               </div>
               <h3 style={{ fontSize:15, fontWeight:700, color:C.text, margin:0, lineHeight:1.3 }}>{item.tema}</h3>
               {item.proyecto && <div style={{ fontSize:11, color:C.muted, marginTop:3 }}>📁 {item.proyecto}</div>}
@@ -4236,7 +3861,7 @@ export default function OpsBoard() {
   const [showIntake,  setShowIntake] = useState(false)
   const [intakeLog,   setIntakeLog]  = useState(null)
 
-  const allItems = items.filter(i => !i._deleted)
+  const allItems = items
   const owners   = [...new Set(allItems.map(i => i.propietario).filter(Boolean))]
 
   const loadData = async () => {
@@ -4268,13 +3893,13 @@ export default function OpsBoard() {
     return unsubscribe
   }, [])
 
-  const addLocalItem = async item => {
+  const addItem = async item => {
     try { await insertItems([item]) }
     catch (error) { setToast('⚠ Error al guardar: ' + error.message); return }
     setItems(prev => [item, ...prev])
     setToast('✓ Tarea guardada')
   }
-  const addLocalItems = async newItems => {
+  const addItems = async newItems => {
     try { await insertItems(newItems) }
     catch (error) { setToast('⚠ Error al guardar: ' + error.message); return }
     setItems(prev => [...newItems, ...prev])
@@ -4288,7 +3913,7 @@ export default function OpsBoard() {
     // Dependencias: al completar un tema con bloqueos sin resolver se pide confirmación (se puede forzar)
     const cur = itemsRef.current.find(i => i.id === id)
     if (fields.status === 'done' && cur && cur.status !== 'done') {
-      const warn = completionWarning(id, relsRef.current, itemsRef.current.filter(i => !i._deleted))
+      const warn = completionWarning(id, relsRef.current, itemsRef.current)
       if (warn) {
         if (askingRef.current.has(id)) return                       // second identical call while the dialog is open
         askingRef.current.add(id)
@@ -4309,7 +3934,6 @@ export default function OpsBoard() {
   }
 
   const onNextSt = (id, newSt) => {
-    if (newSt === 'done') saveDoneTs(id)
     onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt]||'No iniciado' })
   }
 
@@ -4337,10 +3961,6 @@ export default function OpsBoard() {
   }
   const createProjectFromMail = async row => { await insertProyectoRows([row]); const all = await loadAll(); setProyectos(all.proyectos) }
 
-  const proyectosConOv = proyectos.map(p => {
-    const ov = getProyOverrides()[norm(p.nombre)] || {}
-    return Object.keys(ov).length > 0 ? { ...p, ...ov, _hasLocalProy:true } : p
-  })
   // Cambios desde Portfolio / Project Overview: se refleja al instante y se revierte si falla el guardado.
   const asDate = s => (s ? new Date(`${s}T12:00:00`) : null)
   const onProjectChange = async (id, fields) => {
@@ -4353,14 +3973,11 @@ export default function OpsBoard() {
     try { await updateProyecto(id, fields) }
     catch (e) { setProyectos(prev => prev.map(p => (p.id === id ? before : p))); throw e }
   }
-  const onProyUpdate = (nombre, fields) =>
-    setProyectos(prev => prev.map(p => norm(p.nombre)===norm(nombre) ? {...p,...fields,_hasLocalProy:true} : p))
-
   const onUnifyTema = (temaViejoId, temaDestId, tituloFinal, notasFinal) => {
     // Actualizar tema destino
     setItems(prev => prev.map(i => {
       if (i.id === temaDestId) {
-        return { ...i, tema: tituloFinal, notas: notasFinal, _hasLocal: true }
+        return { ...i, tema: tituloFinal, notas: notasFinal }
       }
       return i
     }))
@@ -4369,14 +3986,6 @@ export default function OpsBoard() {
     // Guardar en Supabase
     mergeItems({ keepId: temaDestId, removeId: temaViejoId, tema: tituloFinal, notas: notasFinal }).catch(e => console.error('[onUnifyTema]', e))
   }
-
-  useEffect(() => {
-    // Items ya completados en el sheet → timestamp de hace 8 días → van directo a Histórico
-    const OLD_TS = Date.now() - 8 * 86400000
-    allItems.filter(i => i.status === 'done').forEach(i => {
-      try { if (!localStorage.getItem(DONE_TS_KEY(i.id))) localStorage.setItem(DONE_TS_KEY(i.id), OLD_TS.toString()) } catch {}
-    })
-  }, [items.length])
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -4549,51 +4158,6 @@ export default function OpsBoard() {
               </button>
             </>
           )}
-          {(items.length === 0 || proyectos.length === 0) && !loading && (
-            <button onClick={async () => {
-              setToast('⏳ Migrando desde Google Sheets…')
-              try {
-                const r = await fetch('/api/data')
-                if (!r.ok) throw new Error('HTTP ' + r.status)
-                const { values } = await r.json()
-                const tables = parseSheetValues(values)
-                let migratedItems = 0, migratedProys = 0
-                // Only migrate items if none exist yet
-                if (items.length === 0) {
-                  const sheetItems = buildItems(tables)
-                  if (sheetItems.length) {
-                    try { await insertItems(sheetItems) } catch (e1) { throw new Error('items: ' + e1.message) }
-                    migratedItems = sheetItems.length
-                  }
-                }
-                // Only migrate proyectos if none exist yet
-                if (proyectos.length === 0) {
-                  const sheetProys = parseProyectos(tables)
-                  const proyRows = sheetProys.map(p => ({
-                    id: uid(), nombre: p.nombre||'Sin nombre', descripcion: p.descripcion||'',
-                    propietario: p.propietario||'', prioridad: p.prioridad||'',
-                    estado: p.estado||'', status: p.status||'pending', desarrollo: p.desarrollo||'',
-                    fecha_inicio: p.fechaInicio instanceof Date ? p.fechaInicio.toISOString() : null,
-                    fecha_fin:    p.fechaFin    instanceof Date ? p.fechaFin.toISOString()    : null,
-                    notas: p.notas||'', fase: p.fase||'',
-                    capex: p.capex||null, nombre_en: p.nombreEN||'',
-                  }))
-                  if (proyRows.length) {
-                    await insertProyectoRows(proyRows)
-                    migratedProys = proyRows.length
-                  } else {
-                    setToast('⚠ No se encontraron proyectos en el Sheet')
-                    loadData(); return
-                  }
-                }
-                setToast('✓ Migradas ' + migratedItems + ' tareas + ' + migratedProys + ' proyectos')
-                loadData()
-              } catch(e) { setToast('⚠ Error migrando: ' + e.message) }
-            }}
-              style={{ padding:'7px 14px', background:'#1e40af', color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              ⬆ {proyectos.length === 0 && items.length > 0 ? 'Migrar Proyectos' : 'Migrar Sheets → Supabase'}
-            </button>
-          )}
         </div>
 
         {/* Content */}
@@ -4621,13 +4185,13 @@ export default function OpsBoard() {
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
               {vista === '✉️ Backlog Mail'    && <BacklogMailView supported={BACKEND === 'pm'} projectNames={proyectos.map(p => p.nombre)} onCreateTopic={createTopicFromMail} onCreateProject={createProjectFromMail} onCount={setMailPending} newId={uid} ui={{ C }} api={{ listMailCandidates, decideMailCandidate }} />}
               {vista === '👥 Workload'        && <WorkloadView items={allItems} supported={BACKEND === 'pm'} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} ui={{ C, Tag, fmtFecha }} api={{ listPeople, updatePersonCapacity }} />}
-              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} onCreateProject={BACKEND === 'pm' ? createProjectFromMail : undefined} onToast={msg => setToast(msg)} lang={lang} />}
+              {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectos} allItems={allItems} onAddTema={addItem} onOpenItem={item => setItemActivo(item)} onItemChange={onItemChange} onCreateProject={BACKEND === 'pm' ? createProjectFromMail : undefined} onToast={msg => setToast(msg)} lang={lang} />}
               {vista === 'Dashboard'          && <Dashboard allItems={allItems} />}
               {vista === '🧑 My Work'         && <MyWork items={allItems} me={me} onIdentify={identify} onLogout={logoutMe} onOpenItem={item => setItemActivo(item)} />}
               {vista === '☰ Lista'            && <ListaView items={allItems} me={me} owners={KNOWN_OWNERS} projectNames={proyectos.map(p => p.nombre)} onItemChange={onItemChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, priColor, fmtFecha }} api={{ listSavedViews, saveSavedView, deleteSavedView }} />}
               {vista === '📋 Plan de Acción'  && <PlanAccion />}
               {vista === '📅 Campañas CVM'    && <CampanasCVM campanas={campanas} />}
-              {vista === '✨ IA Intake'        && <IAIntake onAdd={addLocalItems} allItems={allItems} />}
+              {vista === '✨ IA Intake'        && <IAIntake onAdd={addItems} allItems={allItems} />}
               {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang.toUpperCase()} onDeleteItem={async (id) => {
                 const it = items.find(i => i.id === id)
                 if (!(await askConfirm(`¿Borrar el tema "${it?.tema || id}"? Esta acción no se puede deshacer.`))) return
@@ -4641,7 +4205,7 @@ export default function OpsBoard() {
 
       {showNuevo && (
         <NuevoTema
-          onAdd={addLocalItem}
+          onAdd={addItem}
           onClose={() => setShowNuevo(false)}
           proyectoNames={proyectos.map(p => p.nombre)} />
       )}

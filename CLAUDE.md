@@ -120,7 +120,7 @@ const KNOWN_OWNERS = ['Juan Rodriguez Peisel','Francisco Toledo','Nacho Cruz','M
 1. **Carga inicial:** `loadAll()` de `src/lib/api` (items, proyectos, campañas).
 2. **Escritura:** `onItemChange(id, fields)` → `updateItem()`; altas con `insertItems()`; borrado con `deleteItem()` (el Reporte pide confirmación antes de borrar).
 3. **Tiempo real:** `subscribeToItems()` escucha `work_items` (añadida a la publicación `supabase_realtime`).
-4. **Botón "Migrar Sheets → Supabase"** (solo aparece con 0 items o proyectos): escribe vía la capa activa; ya no debería hacer falta.
+4. **Borrado y proyectos**: "Eliminar tema" borra de verdad (`deleteItem`; subtareas, checklists, comentarios y relaciones caen por cascada) con confirmación en línea; los diálogos de confirmación son propios (`askConfirm`), no `window.confirm`. "+ Nuevo proyecto" (vista Proyectos) crea proyectos con `insertProyectoRows` (solo backend `pm`). El Histórico usa `completedAt` (columna `completed_at`); lo cerrado sin fecha sale en "Sin fecha de cierre".
 
 ---
 
@@ -146,12 +146,14 @@ Los SQL para el editor de Supabase están en `scripts/migration/remote/` (A–D)
 
 - [ ] **RESEND_API_KEY** no configurada en Vercel → las alertas de email no funcionan
 - [ ] **Campañas CVM** — tabla vacía, no hay UI para crear campañas
-- [ ] **Botón de migración Sheets** — retirar
+- [x] **Botón de migración Sheets** — retirado
 - [ ] **Histórico de proyectos** — no existe (solo para items)
 - [ ] **`plan_accion`** — migrar desde el Excel vigente (la tabla actual perdió datos en su import original)
 - [ ] **Proyectos duplicados** sin resolver (se mantienen separados): GAMIFICACIÓN / Gamificación y comunidad; Mejora comunicación CDV / BPMOC217 - Mejora comunicación CDV Prepago; Evolución/Mejoras e-SIM Prepago / MEJORA WEB ESIM PREPAGO
 - [ ] **Retirada de legacy** tras una semana de observación (backup final antes)
-- [ ] **Sin probar en producción:** crear/editar proyectos, hitos y comentarios; tiempo real con dos pestañas
+- [ ] **Sin probar en producción:** editar proyectos, hitos y comentarios de proyecto; tiempo real con dos pestañas
+- [ ] **Comentarios de tema (modal) siguen en localStorage** (`obs-comments`, por navegador y clave = título): hay que pasarlos a la tabla `comments` del modelo PM
+- [ ] **Cancelado** no existe en la UI (el adaptador lo mapea a `done`); los cancelados no tienen `completed_at`
 - [ ] Dato sospechoso: la fecha de fin de BPMOC264 es 05/06/**2024**
 - [ ] Fuera de alcance por ahora: Auth/permisos, vistas nuevas (Board, My Work, Portfolio), Workload
 
@@ -178,5 +180,6 @@ git push origin main # Vercel auto-deploya desde main
 - **Fechas**: la UI formatea con `toISOString().slice(0,10)`; un `Date` a medianoche de Madrid se vería un día antes. Por eso el adaptador entrega mediodía local.
 - **Backlog**: los items con `status:'backlog'` salen del kanban y van a la sección colapsable; ⊟ los mueve al backlog y "Activar" los devuelve a un estado.
 - **Traducción**: el Reporte usa claves `ES`/`EN` en mayúsculas; el menú lateral no se traduce.
-- **localStorage del navegador** (no migrado a la BD): `obs-proy-overrides` (ediciones de proyecto antiguas, superpuestas en la UI), `obs-comments`, `obs-done-ts-*` (marcas del Histórico). Se perdió deliberadamente cualquier dato que solo existiera ahí.
+- **localStorage del navegador**: ya no se usan `obs-proy-overrides`, `obs-proj-comments` ni `obs-done-ts-*` (código retirado). Queda `obs-comments` (comentarios del modal de tema, solo en ese navegador) y preferencias de vista (`obs-dash-*`, `opsboard-me`). Se perdió deliberadamente cualquier dato que solo existiera ahí.
+- **Backlog Mail automático**: skill `.claude/skills/backlog-mail/SKILL.md` + `scripts/mail-ingest.mjs` (`context` / `insert`, dedupe por mensaje y asunto, números de cliente enmascarados). Tareas programadas `backlog-mail-0830`, `backlog-mail-midday` (10, 13, 15 h) y `backlog-mail-1730`, lun-vie, solo con la app de Claude abierta.
 - **App.jsx monolítico**: si crece mucho más, partir en componentes.
