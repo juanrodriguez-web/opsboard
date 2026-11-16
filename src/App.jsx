@@ -8,7 +8,7 @@ import {
   BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
-import { AUTH_REQUIRED, signOut } from './lib/auth.js'
+import { AUTH_REQUIRED, signOut, changePassword } from './lib/auth.js'
 import { blockersOf, blockedBy, relatedTo, blockedIdSet, candidatesFor, completionWarning } from './lib/deps.js'
 import ListaView from './views/ListaView.jsx'
 import PortfolioView from './views/PortfolioView.jsx'
@@ -3889,6 +3889,9 @@ export default function OpsBoard() {
   const [asF,         setAsF]        = useState('all')
   const [modo,        setModo]       = useState('kanban')
   const [toast,       setToast]      = useState(null)
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwNew, setPwNew] = useState('')
+  const [pwMsg, setPwMsg] = useState(null)               // { ok, text }
   const [confirmDlg,  setConfirmDlg]  = useState(null)             // in-app confirmation (replaces window.confirm)
   const askConfirm = text => new Promise(res => setConfirmDlg({ text, res }))
   const askingRef = useRef(new Set())
@@ -4163,6 +4166,10 @@ export default function OpsBoard() {
               style={{ background:'none', border:`1px solid ${C.border}`, color:'#9b978f', borderRadius:6, padding:'4px 9px', fontSize:12, cursor:'pointer', lineHeight:1 }}>
               {loading ? '⏳' : '↺'}
             </button>
+            {AUTH_REQUIRED && (
+              <button onClick={() => { setPwOpen(true); setPwNew(''); setPwMsg(null) }} title="Cambiar contraseña"
+                style={{ background:'none', border:`1px solid ${C.border}`, color:'#9b978f', borderRadius:6, padding:'4px 9px', fontSize:12, cursor:'pointer', lineHeight:1 }}>🔑</button>
+            )}
           </div>
 
         </div>
@@ -4262,6 +4269,21 @@ export default function OpsBoard() {
           onCheckProgress={(id, pr) => setCheckProgress(prev => ({ ...prev, [id]: pr }))}
           onDelete={deleteTopic}
           onToast={msg => setToast(msg)} />
+      )}
+      {pwOpen && (
+        <div role="dialog" aria-modal="true" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:16 }}>
+          <form onSubmit={async e => { e.preventDefault(); const err = await changePassword(pwNew); setPwMsg(err ? { ok:false, text:err } : { ok:true, text:'Contraseña cambiada' }); if (!err) setPwNew('') }}
+            style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:10, padding:20, maxWidth:380, width:'100%' }}>
+            <div style={{ fontWeight:700, marginBottom:10 }}>Cambiar contraseña</div>
+            <input type="password" autoFocus autoComplete="new-password" aria-label="Nueva contraseña" placeholder="Nueva contraseña (mínimo 8 caracteres)" value={pwNew} onChange={e => { setPwNew(e.target.value); setPwMsg(null) }}
+              style={{ width:'100%', boxSizing:'border-box', background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'8px 10px', fontSize:13, marginBottom:10 }} />
+            {pwMsg && <div role="alert" style={{ fontSize:12, marginBottom:10, color:pwMsg.ok ? '#059669' : '#f43f5e' }}>{pwMsg.text}</div>}
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <Btn v="sec" onClick={() => setPwOpen(false)}>Cerrar</Btn>
+              <button type="submit" disabled={!pwNew} style={{ background:C.accent, color:'#fff', border:'none', borderRadius:8, padding:'7px 16px', fontSize:13, fontWeight:600, cursor:'pointer', opacity:pwNew ? 1 : 0.6 }}>Guardar</button>
+            </div>
+          </form>
+        </div>
       )}
       {confirmDlg && (
         <div role="dialog" aria-modal="true" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:16 }}>

@@ -1,4 +1,5 @@
-// Sign-in with an e-mail link (Supabase Auth). The data layer (src/lib/api) never touches this: components call these helpers only.
+// Sign-in with e-mail + password (Supabase Auth). Users are created by the admin in the Supabase dashboard (auto-confirmed, sign-ups disabled),
+// so no e-mail is ever sent. The data layer (src/lib/api) never touches this: components call these helpers only.
 // Login is OFF unless VITE_REQUIRE_AUTH === 'true' (so the code can ship before the database is locked down).
 import { supabase } from './supabase.js'
 
@@ -11,13 +12,23 @@ export const onSessionChange = cb => {
   return () => data.subscription.unsubscribe()
 }
 
-// Sends a one-time sign-in link to the address. Returns null on success or a message for the user.
-export async function sendLoginLink(email) {
+// Returns null on success or a message for the user.
+export async function signInWithPassword(email, password) {
   const clean = String(email || '').trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return 'Escribe un correo válido'
-  const { error } = await supabase.auth.signInWithOtp({ email: clean, options: { emailRedirectTo: window.location.origin } })
-  if (error) return /rate|seconds|limit/i.test(error.message) ? 'Espera un minuto antes de pedir otro enlace' : 'No se pudo enviar el enlace: ' + error.message
-  return null
+  if (!password) return 'Escribe tu contraseña'
+  const { error } = await supabase.auth.signInWithPassword({ email: clean, password })
+  if (!error) return null
+  if (/invalid login/i.test(error.message)) return 'Correo o contraseña incorrectos'
+  if (/rate|seconds|limit/i.test(error.message)) return 'Demasiados intentos: espera un minuto'
+  return 'No se pudo entrar: ' + error.message
+}
+
+// For someone already signed in. Returns null on success or a message.
+export async function changePassword(newPassword) {
+  if (String(newPassword || '').length < 8) return 'La contraseña debe tener al menos 8 caracteres'
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  return error ? 'No se pudo cambiar la contraseña: ' + error.message : null
 }
 
 export const signOut = async () => { try { await supabase.auth.signOut() } catch { /* offline: the local session is cleared anyway */ } }

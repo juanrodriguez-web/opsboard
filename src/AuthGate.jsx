@@ -1,7 +1,7 @@
-// Shows the app only to a signed-in person who exists in OpsBoard (people.email). Off unless VITE_REQUIRE_AUTH=true.
+// Shows the app only to a signed-in person (e-mail + password) who exists in OpsBoard (people.email). Off unless VITE_REQUIRE_AUTH=true.
 // On success it stores the identity the app already uses for "My Work" (opsboard-me), so the rest of the app needs no change.
 import { useState, useEffect } from 'react'
-import { AUTH_REQUIRED, getSession, onSessionChange, sendLoginLink, signOut } from './lib/auth.js'
+import { AUTH_REQUIRED, getSession, onSessionChange, signInWithPassword, signOut } from './lib/auth.js'
 import { findPersonByEmail } from './lib/api/index.js'
 
 const box = { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: '#f6f5f3', fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }
@@ -10,26 +10,30 @@ const btn = { width: '100%', padding: '10px 14px', borderRadius: 8, border: 'non
 
 function Login() {
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [msg, setMsg] = useState('')
-  const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const submit = async e => {
     e.preventDefault(); setBusy(true); setMsg('')
-    const err = await sendLoginLink(email)
+    const err = await signInWithPassword(email, password)
     setBusy(false)
-    if (err) setMsg(err); else setSent(true)
+    if (err) setMsg(err)                                  // on success the session listener swaps this screen for the app
   }
   return (
     <div style={box}><form style={card} onSubmit={submit}>
       <h1 style={{ fontSize: 20, margin: '0 0 6px' }}>OpsBoard</h1>
-      {sent ? <p style={{ fontSize: 14, lineHeight: 1.5, margin: '12px 0 0' }}>Te hemos enviado un enlace a <b>{email}</b>. Ábrelo en este navegador para entrar. Puedes cerrar esta pestaña de OpsBoard.</p> : <>
-        <p style={{ fontSize: 13, color: '#6a6f7a', margin: '0 0 16px' }}>Escribe tu correo de Sercom y te enviamos un enlace de acceso.</p>
+      <>
+        <p style={{ fontSize: 13, color: '#6a6f7a', margin: '0 0 16px' }}>Entra con tu correo de Sercom y tu contraseña.</p>
         <label htmlFor="login-email" style={{ fontSize: 12, fontWeight: 600 }}>Correo</label>
-        <input id="login-email" type="email" autoFocus autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nombre@sercomsoluciones.es"
+        <input id="login-email" type="email" autoFocus autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nombre@sercomsoluciones.es" 
           style={{ width: '100%', boxSizing: 'border-box', margin: '4px 0 12px', padding: '9px 10px', border: '1px solid #e3e1dc', borderRadius: 8, fontSize: 14 }} />
-        <button type="submit" disabled={busy || !email.trim()} style={{ ...btn, opacity: busy || !email.trim() ? 0.6 : 1 }}>{busy ? 'Enviando…' : 'Enviarme el enlace'}</button>
+        <label htmlFor="login-pass" style={{ fontSize: 12, fontWeight: 600 }}>Contraseña</label>
+        <input id="login-pass" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box', margin: '4px 0 12px', padding: '9px 10px', border: '1px solid #e3e1dc', borderRadius: 8, fontSize: 14 }} />
+        <button type="submit" disabled={busy || !email.trim() || !password} style={{ ...btn, opacity: busy || !email.trim() || !password ? 0.6 : 1 }}>{busy ? 'Entrando…' : 'Entrar'}</button>
         {msg && <div role="alert" style={{ color: '#b91c1c', fontSize: 12, marginTop: 10 }}>{msg}</div>}
-      </>}
+        <p style={{ fontSize: 11.5, color: '#6a6f7a', margin: '14px 0 0' }}>¿No tienes acceso o has olvidado la contraseña? Pídeselo a Juan.</p>
+      </>
     </form></div>
   )
 }
