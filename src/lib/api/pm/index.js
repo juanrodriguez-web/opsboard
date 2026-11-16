@@ -3,8 +3,9 @@
 import { unwrap } from '../util.js'
 import {
   normName, isUuid, statusKeyFromLegacy, prioToPm, projectStatusFromLegacy, dateFromUi, dateToUi,
-  workToItem, projectToApp, workToHito, commentToApp, itemPatchToWork, estadoSheetFor,
+  workToItem, projectToApp, workToHito, commentToApp, itemPatchToWork, estadoSheetFor, statusLegacyFromKey,
 } from './mappers.js'
+import { wouldCreateCycle } from '../../deps.js'
 
 const ITEM_COLS = '*'
 
@@ -12,6 +13,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
   let refs = null
   const itemCache = new Map()        // appId -> { pmId, legacy }
   const pmToApp = new Map()          // work_items.id -> appId (needed to translate realtime DELETE events)
+  const childParent = new Map()      // subtask work_items.id -> parent work_items.id (realtime DELETE events carry only the id)
 
   async function loadRefs(force = false) {
     if (refs && !force) return refs
@@ -71,9 +73,58 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
   // ── items ──────────────────────────────────────────────────────
   async function listItems() {
     const r = await loadRefs(true)
-    const rows = unwrap(await client.from('work_items').select(ITEM_COLS).neq('type', 'milestone').order('created_at', { ascending: false }).order('number', { ascending: true }), 'items') || []
+    const all = unwrap(await client.from('work_items').select(ITEM_COLS).neq('type', 'milestone').order('created_at', { ascending: false }).order('number', { ascending: true }), 'items') || []
+    const rows = all.filter(w => !w.parent_id)
+    const kids = groupChildren(all.filter(w => w.parent_id))
     rows.forEach(remember)
-    return rows.map(w => workToItem(w, r))
+    return rows.map(w => workToItem(w, r, kids.get(w.id) || null))
+  }
+
+  // Subtasks are child work_items. Children are grouped by parent in creation order (work_items.number).
+  function groupChildren(children) {
+    const m = new Map()
+    for (const c of [...children].sort((a, b) => (a.number ?? 0) - (b.number ?? 0))) {
+      childParent.set(c.id, c.parent_id)
+      if (!m.has(c.parent_id)) m.set(c.parent_id, [])
+      m.get(c.parent_id).push(c)
+    }
+    return m
+  }
+
+  async function fetchItem(pmId) {
+    const r = await loadRefs()
+    const rows = unwrap(await client.from('work_items').select(ITEM_COLS).eq('id', pmId)) || []
+    if (!rows.length || rows[0].parent_id || rows[0].type === 'milestone') return null
+    const kids = unwrap(await client.from('work_items').select(ITEM_COLS).eq('parent_id', pmId).order('number', { ascending: true })) || []
+    kids.forEach(c => childParent.set(c.id, c.parent_id))
+    remember(rows[0])
+    return workToItem(rows[0], r, kids)
+  }
+
+  // Makes the children of `parentPmId` equal to `desired` (the UI's full subtasks array): insert new, update changed, delete removed.
+  async function syncSubtasks(parentPmId, desired) {
+    const r = await loadRefs()
+    const parent = (unwrap(await client.from('work_items').select('id, project_id').eq('id', parentPmId)) || [])[0]
+    if (!parent) throw new Error('item not found')
+    const current = unwrap(await client.from('work_items').select(ITEM_COLS).eq('parent_id', parentPmId).order('number', { ascending: true })) || []
+    const cur = new Map(current.map(c => [c.legacy_id ?? c.id, c]))
+    const want = (desired || []).filter(s => s && s.id && String(s.title || '').trim())
+    const wantIds = new Set(want.map(s => s.id))
+    for (const c of current) if (!wantIds.has(c.legacy_id ?? c.id)) { unwrap(await client.from('work_items').delete().eq('id', c.id)); childParent.delete(c.id) }
+    const inserts = []
+    for (const s of want) {
+      const row = {
+        title: String(s.title).trim(), notes: s.notas || '', risk: ['green', 'yellow', 'red'].includes(s.risk) ? s.risk : null,
+        status_id: r.statusIdByKey.get(statusKeyFromLegacy(s.status || 'pending')) ?? r.statusIdByKey.get('planned'),
+        assignee_id: s.prop ? r.personIdByNorm.get(normName(s.prop)) ?? null : null, due_date: dateFromUi(s.fechaFin),
+      }
+      const c = cur.get(s.id)
+      if (!c) { inserts.push({ legacy_source: 'subtareas', legacy_id: s.id, type: 'task', parent_id: parentPmId, project_id: parent.project_id, tags: [], ...row }); continue }
+      const changed = c.title !== row.title || (c.notes || '') !== row.notes || (c.risk ?? null) !== row.risk || c.status_id !== row.status_id
+        || (c.assignee_id ?? null) !== row.assignee_id || (c.due_date ?? null) !== row.due_date
+      if (changed) unwrap(await client.from('work_items').update(row).eq('id', c.id))
+    }
+    if (inserts.length) { const data = unwrap(await client.from('work_items').insert(inserts).select('id, parent_id')); (data || []).forEach(c => childParent.set(c.id, c.parent_id)) }
   }
 
   function itemToWorkRow(item, r, assigneeId) {
@@ -84,7 +135,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
       status_id: r.statusIdByKey.get(statusKeyFromLegacy(item.status || 'pending')),
       priority: prioToPm(item.prioridad || ''), assignee_id: assigneeId,
       start_date: dateFromUi(item.fechaInicio), due_date: dateFromUi(item.fechaFin),
-      tags: item.category ? [item.category] : [], risk: item.risk || 'green', legacy_subtareas: item.subtareas || [],
+      tags: item.category ? [item.category] : [], risk: item.risk || 'green', legacy_subtareas: [],
       legacy: { estado_sheet: item.estadoSheet || estadoSheetFor(item.status || 'pending'), archivos: item.archivos || '', category: item.category || 'projects',
                 proyecto: projectId ? '' : (item.proyecto || '') },
     }
@@ -96,6 +147,11 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     for (const item of items) rows.push(itemToWorkRow(item, r, await ensurePerson(item.propietario)))
     const data = unwrap(await client.from('work_items').insert(rows).select('id, legacy_id, legacy'))
     ;(data || []).forEach(remember)
+    for (const item of items) {                                   // subtasks of the new items become child rows
+      if (!Array.isArray(item.subtareas) || !item.subtareas.length) continue
+      const parent = (data || []).find(d => d.legacy_id === item.id)
+      if (parent) await syncSubtasks(parent.id, item.subtareas)
+    }
   }
 
   async function updateItem(id, fields) {
@@ -115,6 +171,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
       patch.legacy = legacy
       it.legacy = legacy
     }
+    if (fields.subtareas !== undefined) { await syncSubtasks(it.pmId, fields.subtareas); patch.legacy_subtareas = [] }   // child rows are the source of truth
     if (!Object.keys(patch).length) return
     unwrap(await client.from('work_items').update(patch).eq('id', it.pmId))
   }
@@ -134,14 +191,20 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     const channel = client
       .channel('work-items-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'work_items' }, async payload => {
-        if (payload.eventType === 'DELETE') { onDelete?.(pmToApp.get(payload.old.id) ?? payload.old.id); return }
+        if (payload.eventType === 'DELETE') {
+          const parent = childParent.get(payload.old.id)               // a subtask was removed: refresh its parent item
+          if (parent) { childParent.delete(payload.old.id); const it = await fetchItem(parent); if (it) onUpdate?.(it); return }
+          onDelete?.(pmToApp.get(payload.old.id) ?? payload.old.id); return
+        }
         const w = payload.new
         if (w.type === 'milestone') return
+        if (w.parent_id) { const it = await fetchItem(w.parent_id); if (it) onUpdate?.(it); return }   // subtask insert/update -> parent
         let r = await loadRefs()
         const stale = !r.statusKeyById.has(w.status_id) || (w.assignee_id && !r.personNameById.has(w.assignee_id)) || (w.project_id && !r.projectById.has(w.project_id))
         if (stale) r = await loadRefs(true)
         remember(w)
-        const item = workToItem(w, r)
+        const kids = unwrap(await client.from('work_items').select(ITEM_COLS).eq('parent_id', w.id).order('number', { ascending: true })) || []
+        const item = workToItem(w, r, kids)
         if (payload.eventType === 'INSERT') onInsert?.(item)
         else if (payload.eventType === 'UPDATE') onUpdate?.(item)
       })
@@ -277,9 +340,34 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     return data && data[0]
   }
   async function deleteSavedView(id) { unwrap(await client.from('saved_views').delete().eq('id', id)) }
+  // ── dependencies (work_item_relations) ─────────────────────────
+  // UI shape: { id, kind: 'blocks' | 'related', fromId, toId } with app item ids. A 'blocks' row means fromId blocks toId.
+  async function listRelations() {
+    const rows = unwrap(await client.from('work_item_relations').select('*'), 'relations') || []
+    return rows.map(r => ({ id: r.id, kind: r.kind, fromId: pmToApp.get(r.from_id), toId: pmToApp.get(r.to_id) })).filter(r => r.fromId && r.toId)
+  }
+
+  async function addRelation({ fromId, toId, kind = 'blocks' }) {
+    if (!['blocks', 'related'].includes(kind)) throw new Error('Tipo de relación no válido')
+    const a = await resolveItem(fromId), b = await resolveItem(toId)
+    if (a.pmId === b.pmId) throw new Error('Un tema no puede depender de sí mismo')
+    let from = a.pmId, to = b.pmId
+    if (kind === 'related' && from > to) [from, to] = [to, from]            // symmetric relations are stored once with from < to
+    if (kind === 'blocks') {
+      const edges = (unwrap(await client.from('work_item_relations').select('from_id, to_id, kind').eq('kind', 'blocks')) || []).map(r => ({ kind: 'blocks', fromId: r.from_id, toId: r.to_id }))
+      if (wouldCreateCycle(edges, from, to)) throw new Error('Esta dependencia crearía un ciclo')
+    }
+    const { data, error } = await client.from('work_item_relations').insert({ from_id: from, to_id: to, kind }).select('*').single()
+    if (error) throw new Error(/duplicate|unique/i.test(error.message) ? 'Esa relación ya existe' : 'relations: ' + error.message)
+    return { id: data.id, kind: data.kind, fromId: pmToApp.get(data.from_id), toId: pmToApp.get(data.to_id) }
+  }
+
+  async function removeRelation(id) { unwrap(await client.from('work_item_relations').delete().eq('id', id)) }
+
   async function loadAll() {
     const [items, proyectos, campanas] = await Promise.all([listItems(), listProyectos(), listCampanas ? listCampanas() : []])
-    return { items, proyectos, campanas }
+    const relations = await listRelations().catch(() => [])      // after listItems so app ids are known
+    return { items, proyectos, campanas, relations }
   }
 
   return {
@@ -287,7 +375,7 @@ export function createPmApi(client, { listCampanas, listPlanAccion } = {}) {
     listProyectos, updateProyecto, insertProyectoRows,
     listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
     listCampanas, listPlanAccion, findPersonByEmail,
-    listSavedViews, saveSavedView, deleteSavedView,
+    listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation,
     _test: { loadRefs, dateToUi },
   }
 }

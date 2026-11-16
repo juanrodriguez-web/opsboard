@@ -15,11 +15,12 @@ const api = BACKEND === 'pm' ? createPmApi(supabase, legacyApi) : legacyApi
 
 export const loadAll = BACKEND === 'pm' ? api.loadAll : async () => {
   const [items, proyectos, campanas] = await Promise.all([api.listItems(), api.listProyectos(), api.listCampanas()])
-  return { items, proyectos, campanas }
+  return { items, proyectos, campanas, relations: [] }
 }
 export const {
   insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows,
   listHitos, addHito, updateHito, deleteHito, listProyectoComments, addProyectoComment,
   listPlanAccion, listCampanas, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
+  listRelations, addRelation, removeRelation,
 } = api

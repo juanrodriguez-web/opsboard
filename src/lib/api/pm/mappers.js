@@ -36,7 +36,21 @@ export function dateFromUi(v) {
 }
 
 // ── rows -> UI shapes ────────────────────────────────────────────
-export function workToItem(w, refs) {
+// A subtask (child work item) in the shape the UI keeps in item.subtareas.
+export function childToSubtask(c, refs) {
+  return {
+    id: c.legacy_id ?? c.id,
+    title: c.title,
+    status: statusLegacyFromKey(refs.statusKeyById.get(c.status_id)),
+    prop: refs.personNameById.get(c.assignee_id) || '',
+    risk: c.risk || 'green',
+    notas: c.notes || '',
+    fechaFin: c.due_date ? dateToUi(c.due_date).toISOString() : null,
+  }
+}
+
+// children: child work_items of this item (already sorted). Until the explode migration has run the jsonb is used.
+export function workToItem(w, refs, children = null) {
   const status = statusLegacyFromKey(refs.statusKeyById.get(w.status_id))
   const legacy = w.legacy || {}
   return {
@@ -55,7 +69,7 @@ export function workToItem(w, refs) {
     archivos: legacy.archivos || '',
     notas: w.notes || '',
     proyecto: refs.projectById.get(w.project_id)?.name || legacy.proyecto || '',
-    subtareas: Array.isArray(w.legacy_subtareas) ? w.legacy_subtareas : [],
+    subtareas: children && children.length ? children.map(c => childToSubtask(c, refs)) : (Array.isArray(w.legacy_subtareas) ? w.legacy_subtareas : []),
     created_at: w.created_at,
     updated_at: w.updated_at,
   }
@@ -112,7 +126,6 @@ export function itemPatchToWork(fields, ctx) {
   if (fields.fechaInicio !== undefined) p.start_date = dateFromUi(fields.fechaInicio)
   if (fields.fechaFin !== undefined) p.due_date = dateFromUi(fields.fechaFin)
   if (fields.category !== undefined) p.tags = fields.category ? [fields.category] : []
-  if (fields.subtareas !== undefined) p.legacy_subtareas = fields.subtareas
   if (fields.status !== undefined) p.status_id = ctx.statusIdFor(fields.status)
   if (fields.propietario !== undefined) p.assignee_id = ctx.assigneeId
   if (fields.proyecto !== undefined) p.project_id = ctx.projectId

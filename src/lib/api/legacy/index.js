@@ -9,4 +9,7 @@ const listSavedViews = async () => { throw new Error('Saved views need the PM ba
 const saveSavedView = listSavedViews
 const deleteSavedView = listSavedViews
 
-export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView }
+const listRelations = async () => []
+const addRelation = async () => { throw new Error('Las dependencias necesitan el backend PM') }
+const removeRelation = addRelation
+export const legacyApi = { ...items, ...proyectos, ...misc, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView, listRelations, addRelation, removeRelation }

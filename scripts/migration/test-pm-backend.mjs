@@ -15,8 +15,9 @@ for (const t of ['items', 'proyectos', 'hitos', 'comentarios', 'campanas'])
   if (snap[t]?.length) await pg.query(`insert into ${t} select * from jsonb_populate_recordset(null::${t}, $1::jsonb)`, [JSON.stringify(snap[t])])
 for (const f of readdirSync('supabase/migrations').sort()) await pg.exec(readFileSync(join('supabase/migrations', f), 'utf8'))
 await pg.exec(readFileSync('scripts/migration/remote/B_migrar_datos_f1b.sql', 'utf8'))
+await pg.exec('select * from f1e_explode_subtasks(true)')            // subtasks are child rows, as after the explode migration
 const dump = async t => (await pg.query(`select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) j from ${t} x`)).rows[0].j
-const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [] }
+const tables = { statuses: await dump('statuses'), people: await dump('people'), projects: await dump('projects'), work_items: await dump('work_items'), comments: [], saved_views: [], work_item_relations: [] }
 
 // ── fake supabase-js (just the builder surface the backend uses) ──
 const norm = s => (s ?? '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -54,6 +55,7 @@ class Q {
       const out = []
       for (const p of this.pl) {
         if (this.t === 'people' && rows.some(r => norm(r.name) === norm(p.name))) return { data: null, error: { message: 'duplicate key value violates unique constraint "people_name_norm_uq"' } }
+        if (this.t === 'work_item_relations' && rows.some(r => r.from_id === p.from_id && r.to_id === p.to_id && r.kind === p.kind)) return { data: null, error: { message: 'duplicate key value violates unique constraint' } }
         if (this.t === 'work_items' && p.legacy_id && rows.some(r => r.legacy_source === p.legacy_source && r.legacy_id === p.legacy_id)) return { data: null, error: { message: 'duplicate key (legacy_source, legacy_id)' } }
         const row = { id: randomUUID(), created_at: now, updated_at: now, tags: [], legacy: {}, legacy_subtareas: [], completed_at: null, description: '', notes: '', ...p }
         rows.push(row); out.push(row)
@@ -101,7 +103,8 @@ for (const l of legacyItems) {
   if (norm(l.propietario) !== norm(p.propietario)) flag('propietario', l.id)
   if ((l.prioridad || '') !== (p.prioridad || '')) flag('prioridad', l.id)
   if (norm(l.proyecto) !== norm(p.proyecto)) flag('proyecto', l.id)
-  if (JSON.stringify(l.subtareas) !== JSON.stringify(p.subtareas)) flag('subtareas', l.id)
+  const nsub = s => ({ id: s.id, title: s.title, status: s.status, prop: norm(s.prop), risk: s.risk, notas: s.notas || '', due: s.fechaFin ? madrid(s.fechaFin) : null })
+  if (JSON.stringify(l.subtareas.map(nsub)) !== JSON.stringify(p.subtareas.map(s => nsub({ ...s, fechaFin: s.fechaFin ? s.fechaFin : null })))) flag('subtareas', l.id)
   for (const k of ['fechaInicio', 'fechaFin']) {
     const lt = k === 'fechaInicio' ? snap.items.find(x => x.id === l.id).fecha_inicio : snap.items.find(x => x.id === l.id).fecha_fin
     if (madrid(lt) !== fd(p[k]) && !(madrid(lt) === null && p[k] === null)) flag(k + '_calendar_day', l.id)
@@ -147,7 +150,8 @@ await api.updateItem(itemId, { proyecto: 'No existe' })
 row = tables.work_items.find(w => w.legacy_id === itemId)
 rec('updateItem(proyecto unknown): project_id null and the name is kept in legacy.proyecto (shown back by the UI)', row.project_id === null && row.legacy.proyecto === 'No existe' && (await api.listItems()).find(i => i.id === itemId).proyecto === 'No existe')
 await api.updateItem(itemId, { subtareas: [{ id: 'x', title: 't', status: 'pending', prop: '', risk: 'green', notas: '', fechaFin: null }], estadoSheet: 'En peligro' })
-rec('updateItem(subtareas, estadoSheet): stored in legacy_subtareas / legacy.estado_sheet', tables.work_items.find(w => w.legacy_id === itemId).legacy_subtareas[0].id === 'x' && tables.work_items.find(w => w.legacy_id === itemId).legacy.estado_sheet === 'En peligro')
+{ const parent = tables.work_items.find(w => w.legacy_id === itemId); const kids = tables.work_items.filter(w => w.parent_id === parent.id)
+  rec('updateItem(subtareas, estadoSheet): subtasks become child rows (the old ones are replaced), legacy.estado_sheet stored, jsonb stays empty', kids.length === 1 && kids[0].legacy_id === 'x' && kids[0].type === 'task' && kids[0].legacy_source === 'subtareas' && parent.legacy_subtareas.length === 0 && parent.legacy.estado_sheet === 'En peligro') }
 const n0 = tables.work_items.length
 await api.insertItems([{ id: 'new0001', tema: 'Creado en pm', objetivo: 'o', category: 'tools', propietario: 'Francisco Toledo', prioridad: 'P2', risk: 'yellow', status: 'pending', estadoSheet: 'No iniciado', fechaFin: '2027-01-15', archivos: '', notas: '', proyecto: '', subtareas: [] }])
 const created = tables.work_items.find(w => w.legacy_id === 'new0001')
@@ -224,5 +228,77 @@ rec('updateProyecto: invalid health is rejected', await (async () => { try { awa
 const listed = (await api.listProyectos()).find(p => p.id === projLegacy)
 rec('listProyectos exposes health, pmStatus, latestUpdate, latestUpdateAt, objectives', listed.health === 'off_track' && listed.pmStatus === 'active' && listed.latestUpdate === 'Esperando a IT' && !!listed.latestUpdateAt && listed.objectives === 'Lanzar en Q1')
 rec('projects never updated keep health not_set and empty text', (await api.listProyectos()).filter(p => p.id !== projLegacy && p.id !== 'pro0001').every(p => p.health === 'not_set' || p.health === 'at_risk') )
+
+// ── 7. subtasks as child rows ──
+{
+  const withSubs = (await api.listItems()).find(i => i.subtareas.length >= 3)
+  const parentRow = tables.work_items.find(w => w.legacy_id === withSubs.id)
+  const nBefore = tables.work_items.length, subs = withSubs.subtareas
+  // toggle one, edit nothing else
+  await api.updateItem(withSubs.id, { subtareas: subs.map((s, i) => (i === 0 ? { ...s, status: 'done' } : s)) })
+  const kids1 = tables.work_items.filter(w => w.parent_id === parentRow.id)
+  rec('subtask toggled done: only that child changes (status done); no rows added or removed; order kept',
+      tables.work_items.length === nBefore && kids1.length === subs.length && kids1[0].status_id === tables.statuses.find(s => s.key === 'done').id && kids1.slice(1).every(k => k.status_id === tables.statuses.find(s => s.key === 'planned').id) && kids1.map(k => k.legacy_id).join() === subs.map(s => s.id).join())
+  rec('subtask done does NOT fabricate completed_at on the parent', parentRow.completed_at === null)
+  let again = (await api.listItems()).find(i => i.id === withSubs.id)
+  rec('listItems returns the subtasks of an item in the UI shape (id, title, status, prop, risk, notas, fechaFin)', again.subtareas.length === subs.length && again.subtareas[0].status === 'done' && again.subtareas[0].id === subs[0].id && 'prop' in again.subtareas[0] && 'fechaFin' in again.subtareas[0])
+  rec('child rows are not listed as items', (await api.listItems()).length === (await api.listItems()).filter(i => !tables.work_items.find(w => w.legacy_id === i.id)?.parent_id).length && !(await api.listItems()).some(i => i.id === subs[0].id))
+  // add + delete + rename in one save (the UI sends the whole array)
+  await api.updateItem(withSubs.id, { subtareas: [...subs.slice(1).map(s => ({ ...s })), { ...subs[0], title: 'Renombrada', status: 'done' }, { id: 'new-sub', title: '  Nueva  ', status: 'pending', prop: 'Juan Rodriguez Peisel', risk: 'yellow', notas: 'n', fechaFin: '2027-02-03T10:00:00.000Z' }] })
+  const kids2 = tables.work_items.filter(w => w.parent_id === parentRow.id)
+  rec('whole-array save: new subtask inserted (trimmed title, owner, risk, due date, same project as parent), existing renamed, none duplicated',
+      kids2.length === subs.length + 1 && kids2.find(k => k.legacy_id === subs[0].id).title === 'Renombrada' && kids2.find(k => k.legacy_id === 'new-sub').title === 'Nueva' && kids2.find(k => k.legacy_id === 'new-sub').assignee_id === tables.people.find(p => p.name === 'Juan Rodriguez Peisel').id
+      && kids2.find(k => k.legacy_id === 'new-sub').risk === 'yellow' && kids2.find(k => k.legacy_id === 'new-sub').due_date === '2027-02-03' && kids2.find(k => k.legacy_id === 'new-sub').project_id === parentRow.project_id)
+  await api.updateItem(withSubs.id, { subtareas: [] })
+  rec('deleting every subtask removes the child rows', tables.work_items.filter(w => w.parent_id === parentRow.id).length === 0 && (await api.listItems()).find(i => i.id === withSubs.id).subtareas.length === 0)
+  await api.updateItem(withSubs.id, { subtareas: [{ id: 'blank', title: '   ' }, { id: '', title: 'sin id' }] })
+  rec('blank-title or id-less subtasks are ignored', tables.work_items.filter(w => w.parent_id === parentRow.id).length === 0)
+  // insertItems with subtasks (IA intake / new topic with subtasks)
+  await api.insertItems([{ id: 'withsubs1', tema: 'Con subtareas', status: 'pending', risk: 'green', category: 'tools', propietario: '', proyecto: '', prioridad: '', notas: '', objetivo: '', subtareas: [{ id: 's-a', title: 'A', status: 'pending', prop: '', risk: 'green', notas: '', fechaFin: null }, { id: 's-b', title: 'B', status: 'done', prop: '', risk: 'green', notas: '', fechaFin: null }] }])
+  const created2 = (await api.listItems()).find(i => i.id === 'withsubs1')
+  rec('insertItems(with subtareas): children created in order and returned by listItems', created2.subtareas.map(s => s.id + ':' + s.status).join() === 's-a:pending,s-b:done')
+  // deleting the parent removes the children (cascade in the DB; emulated)
+  const pid = tables.work_items.find(w => w.legacy_id === 'withsubs1').id
+  await api.deleteItem('withsubs1'); for (const k of tables.work_items.filter(w => w.parent_id === pid)) tables.work_items.splice(tables.work_items.indexOf(k), 1)
+  rec('deleteItem removes the item (children cascade in Postgres)', !tables.work_items.some(w => w.legacy_id === 'withsubs1'))
+}
+
+// ── 8. realtime for subtasks ──
+{
+  const sub = (await api.listItems()).find(i => i.subtareas.length >= 1) || null
+  const target = sub || (await api.listItems())[0]
+  await api.updateItem(target.id, { subtareas: [{ id: 'rt-sub', title: 'RT', status: 'pending', prop: '', risk: 'green', notas: '', fechaFin: null }] })
+  const parentRow = tables.work_items.find(w => w.legacy_id === target.id), child = tables.work_items.find(w => w.parent_id === parentRow.id)
+  const events = []
+  const unsub2 = api.subscribeToItems({ onInsert: i => events.push(['insert', i.id]), onUpdate: i => events.push(['update', i.id, i.subtareas.map(s => s.id).join()]), onDelete: id => events.push(['delete', id]) })
+  const h = handlers.at(-1)
+  await h({ eventType: 'UPDATE', new: { ...child, title: 'RT editado' }, old: {} })
+  rec('realtime: a subtask UPDATE refreshes its parent item (onUpdate, not onInsert), subtasks included', events.length === 1 && events[0][0] === 'update' && events[0][1] === target.id && events[0][2] === 'rt-sub', JSON.stringify(events))
+  await h({ eventType: 'DELETE', new: {}, old: { id: child.id } })
+  rec('realtime: a subtask DELETE refreshes the parent (not deleting an item)', events.length === 2 && events[1][0] === 'update' && events[1][1] === target.id, JSON.stringify(events))
+  unsub2()
+}
+
+// ── 9. dependencies ──
+{
+  const [a, b, c2, d] = (await api.listItems()).slice(0, 4).map(i => i.id)
+  const r1 = await api.addRelation({ fromId: a, toId: b })
+  rec('addRelation(blocks): one row, returned with app ids (a blocks b)', r1.kind === 'blocks' && r1.fromId === a && r1.toId === b && tables.work_item_relations.length === 1)
+  await api.addRelation({ fromId: b, toId: c2 })
+  const rels = await api.listRelations()
+  rec('listRelations: app ids and kinds, both rows', rels.length === 2 && rels.some(r => r.fromId === a && r.toId === b) && rels.some(r => r.fromId === b && r.toId === c2))
+  const expectErr = async (fn, re) => { try { await fn(); return false } catch (e) { return re.test(e.message) } }
+  rec('addRelation: self dependency rejected', await expectErr(() => api.addRelation({ fromId: a, toId: a }), /sí mismo/))
+  rec('addRelation: duplicate rejected', await expectErr(() => api.addRelation({ fromId: a, toId: b }), /ya existe/))
+  rec('addRelation: a loop (c blocks a, via a->b->c) is rejected; the reverse of an existing block too', await expectErr(() => api.addRelation({ fromId: c2, toId: a }), /ciclo/) && await expectErr(() => api.addRelation({ fromId: b, toId: a }), /ciclo/))
+  rec('addRelation: redundant but acyclic (a blocks c) is allowed', (await api.addRelation({ fromId: a, toId: c2 })).kind === 'blocks')
+  const rr = await api.addRelation({ fromId: d, toId: a, kind: 'related' })
+  const rowR = tables.work_item_relations.find(r => r.kind === 'related')
+  rec('addRelation(related): stored once with from_id < to_id regardless of the order given', rowR.from_id < rowR.to_id && (await api.listRelations()).filter(r => r.kind === 'related').length === 1 && [rr.fromId, rr.toId].sort().join() === [a, d].sort().join())
+  rec('addRelation: unknown kind / unknown item rejected', await expectErr(() => api.addRelation({ fromId: a, toId: d, kind: 'weird' }), /no válido/) && await expectErr(() => api.addRelation({ fromId: a, toId: 'nope' }), /not found/))
+  await api.removeRelation(r1.id)
+  rec('removeRelation', !tables.work_item_relations.some(r => r.id === r1.id) && (await api.listRelations()).length === 3)
+  rec('loadAll also returns relations', Array.isArray((await api.loadAll()).relations))
+}
 console.table(out)
 process.exit(out.some(x => x.result === 'FAIL') ? 1 : 0)

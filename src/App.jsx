@@ -3,9 +3,11 @@ import {
   uid, loadAll, insertItems, updateItem, deleteItem, mergeItems, subscribeToItems,
   updateProyecto, insertProyectoRows, listHitos, addHito as apiAddHito, updateHito, deleteHito,
   listProyectoComments, addProyectoComment as apiAddProyectoComment, listPlanAccion, findPersonByEmail, listSavedViews, saveSavedView, deleteSavedView,
+  addRelation as apiAddRelation, removeRelation as apiRemoveRelation,
   BACKEND,
 } from './lib/api/index.js'
 import { classifyMyWork, cleanEmail, daysBetween } from './lib/mywork.js'
+import { blockersOf, blockedBy, relatedTo, blockedIdSet, candidatesFor, completionWarning } from './lib/deps.js'
 import ListaView from './views/ListaView.jsx'
 import PortfolioView from './views/PortfolioView.jsx'
 import {
@@ -223,7 +225,7 @@ const Toast = ({ msg, type = 'success', onHide }) => {
 }
 
 // ── Tarjeta ──────────────────────────────────────────────────────────────────
-const Tarjeta = ({ item, onClick, onNextSt, onUnify }) => {
+const Tarjeta = ({ item, onClick, onNextSt, onUnify, isBlockedByDep = false }) => {
   const cat       = CATS.find(c => c.id === item.category)
   const nextIdx   = (ST.findIndex(s => s.id === item.status) + 1) % ST.length
   const nextId    = ST[nextIdx].id
@@ -276,6 +278,9 @@ const Tarjeta = ({ item, onClick, onNextSt, onUnify }) => {
           {cat?.label || 'Sin categoría'}
         </span>
         <span style={{ flex:1 }} />
+        {isBlockedByDep && (
+          <span title="Depende de un tema sin completar" style={{ fontSize:10, fontWeight:600, color:'#b45309', background:'#fef3c7', borderRadius:4, padding:'1px 5px' }}>🔒 bloqueado</span>
+        )}
         {item._hasLocal && (
           <span title="Cambios locales pendientes" style={{ fontFamily:"'Geist Mono',monospace", fontSize:9, color:'#a8a39a', border:'1px solid #e8e5df', borderRadius:4, padding:'1px 4px', letterSpacing:'.02em' }}>~local</span>
         )}
@@ -388,7 +393,7 @@ const TableroKPIStrip = ({ items }) => {
 }
 
 // ── Tablero ──────────────────────────────────────────────────────────────────
-const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo, onUnifyTema }) => {
+const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt, modo, setModo, onNuevo, onUnifyTema, blockedIds }) => {
   const [unifyModal, setUnifyModal] = useState(null)
   const [search,      setSearch]      = useState('')
   const [priF,        setPriF]        = useState('all')
@@ -546,7 +551,7 @@ const Tablero = ({ items, catF, setCatF, asF, setAsF, owners, setItem, onNextSt,
                 <div style={{ minHeight:60 }}>
                   {col.length === 0
                     ? <div style={{ border:`2px dashed ${C.border}`, borderRadius:8, padding:'18px 12px', textAlign:'center', color:C.muted, fontSize:11 }}>Vacío</div>
-                    : col.map(item => <Tarjeta key={item.id} item={item} onClick={setItem} onNextSt={onNextSt} onUnify={setUnifyModal} />)}
+                    : col.map(item => <Tarjeta key={item.id} item={item} onClick={setItem} onNextSt={onNextSt} onUnify={setUnifyModal} isBlockedByDep={!!blockedIds?.has(item.id)} />)}
                 </div>
               </div>
             )
@@ -3385,8 +3390,65 @@ const NuevoTema = ({ onAdd, onClose, proyectoNames = [] }) => {
   )
 }
 
+// ── DepsSection: dependencias del tema (bloqueado por / bloquea a / relacionado) ──
+const DepsSection = ({ item, relations, allItems, onAdd, onRemove }) => {
+  const [kind, setKind] = useState('blockedBy')       // 'blockedBy' | 'blocks' | 'related'
+  const [pick, setPick] = useState('')
+  const [err, setErr]   = useState('')
+  const byId = new Map(allItems.map(i => [i.id, i]))
+  const rows = relations.filter(r => r.fromId === item.id || r.toId === item.id)
+  const groups = [
+    { key: 'blockedBy', title: 'Bloqueado por', rows: rows.filter(r => r.kind === 'blocks' && r.toId === item.id), other: r => r.fromId },
+    { key: 'blocks',    title: 'Bloquea a',     rows: rows.filter(r => r.kind === 'blocks' && r.fromId === item.id), other: r => r.toId },
+    { key: 'related',   title: 'Relacionado con', rows: rows.filter(r => r.kind === 'related'), other: r => (r.fromId === item.id ? r.toId : r.fromId) },
+  ]
+  const cands = candidatesFor(item.id, kind === 'related' ? 'related' : 'blocks', kind, relations, allItems.filter(i => !i._deleted))
+    .sort((a, b) => String(a.tema).localeCompare(String(b.tema), 'es'))
+  const add = async () => {
+    if (!pick) return
+    setErr('')
+    try {
+      await onAdd(kind === 'blockedBy' ? { fromId: pick, toId: item.id, kind: 'blocks' }
+                : kind === 'blocks'    ? { fromId: item.id, toId: pick, kind: 'blocks' }
+                :                         { fromId: item.id, toId: pick, kind: 'related' })
+      setPick('')
+    } catch (e) { setErr(e.message || String(e)) }
+  }
+  return (
+    <div style={{ marginBottom:14 }}>
+      <Lbl>Dependencias ({rows.length})</Lbl>
+      {groups.filter(g => g.rows.length).map(g => (
+        <div key={g.key} style={{ marginBottom:6 }}>
+          <div style={{ fontSize:10, color:C.muted, marginBottom:3 }}>{g.title}</div>
+          {g.rows.map(r => {
+            const o = byId.get(g.other(r))
+            return (
+              <div key={r.id} style={{ display:'flex', alignItems:'center', gap:8, background:C.card, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px 10px', marginBottom:3 }}>
+                <span style={{ fontSize:12, flex:1, color: o?.status === 'done' ? C.muted : C.text, textDecoration: o?.status === 'done' ? 'line-through' : 'none' }}>{o?.tema || '(tema borrado)'}</span>
+                {g.key === 'blockedBy' && o && o.status !== 'done' && <span style={{ fontSize:10, color:'#b45309' }}>🔒 sin completar</span>}
+                <button onClick={async () => { try { await onRemove(r.id) } catch (e) { setErr(e.message || String(e)) } }} title="Quitar" style={{ background:'none', border:'none', color:'#fca5a5', cursor:'pointer', fontSize:14, lineHeight:1, padding:'0 2px' }}>✕</button>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+      <div style={{ display:'flex', gap:6 }}>
+        <select value={kind} onChange={e => { setKind(e.target.value); setPick(''); setErr('') }} style={{ background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }}>
+          <option value="blockedBy">Bloqueado por…</option><option value="blocks">Bloquea a…</option><option value="related">Relacionado con…</option>
+        </select>
+        <select value={pick} onChange={e => setPick(e.target.value)} style={{ flex:1, minWidth:0, background:C.card, color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }}>
+          <option value="">Elegir tema…</option>
+          {cands.map(i => <option key={i.id} value={i.id}>{i.tema}</option>)}
+        </select>
+        <button onClick={add} disabled={!pick} style={{ padding:'6px 12px', borderRadius:6, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor: pick ? 'pointer' : 'default', fontWeight:600 }}>+ Añadir</button>
+      </div>
+      {err && <div style={{ fontSize:11, color:'#dc2626', marginTop:4 }}>{err}</div>}
+    </div>
+  )
+}
+
 // ── ModalItem ─────────────────────────────────────────────────────────────────
-const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast }) => {
+const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], onToast, relations = [], allItems = [], onAddRelation, onRemoveRelation }) => {
   const [item,    setItem]    = useState(itemOrig)
   const [editing, setEditing] = useState(false)
   const [nc,      setNc]      = useState('')
@@ -3653,6 +3715,9 @@ const ModalItem = ({ item: itemOrig, onClose, onItemChange, proyectoNames = [], 
                   style={{ padding:'6px 12px', borderRadius:6, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:'pointer', fontWeight:600 }}>+ Add</button>
               </div>
             </div>
+
+            {/* Dependencias */}
+            {onAddRelation && <DepsSection item={item} relations={relations} allItems={allItems} onAdd={onAddRelation} onRemove={onRemoveRelation} />}
 
             {/* Comments */}
             <div>
@@ -3993,6 +4058,7 @@ export default function OpsBoard() {
   const [lang,        setLang]       = useState('es')
   const [items,       setItems]      = useState([])
   const [campanas,    setCampanas]   = useState([])
+  const [relations,   setRelations]  = useState([])
   const [proyectos,   setProyectos]  = useState([])
   const realtimeSub = useRef(null)
   const [loading,     setLoading]    = useState(true)
@@ -4029,7 +4095,8 @@ export default function OpsBoard() {
   const loadData = async () => {
     setLoading(true); setError(null)
     try {
-      const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys } = await loadAll()
+      const { items: fetched, campanas: fetchedCamps, proyectos: fetchedProys, relations: fetchedRels = [] } = await loadAll()
+      setRelations(fetchedRels)
       setItems(fetched)
       setCampanas(fetchedCamps)
       setProyectos(fetchedProys)
@@ -4065,7 +4132,21 @@ export default function OpsBoard() {
     setToast('✓ ' + newItems.length + ' tarea(s) guardadas')
   }
 
+  const itemsRef = useRef([]); itemsRef.current = items
+  const relsRef = useRef([]); relsRef.current = relations
+  const blockedIds = blockedIdSet(relations, allItems)
   const onItemChange = (id, fields) => {
+    // Dependencias: al completar un tema con bloqueos sin resolver se pide confirmación (se puede forzar)
+    const cur = itemsRef.current.find(i => i.id === id)
+    if (fields.status === 'done' && cur && cur.status !== 'done') {
+      const warn = completionWarning(id, relsRef.current, itemsRef.current.filter(i => !i._deleted))
+      if (warn && !window.confirm(warn)) {
+        const { status, estadoSheet, ...rest } = fields; fields = rest
+        setToast('Se mantiene el estado: el tema sigue bloqueado')
+      }
+    }
+    if (!Object.keys(fields).length) return
+    itemsRef.current = itemsRef.current.map(i => i.id === id ? { ...i, ...fields } : i)   // evita preguntar dos veces seguidas
     // Optimistic update
     setItems(prev => prev.map(i => i.id===id ? {...i, ...fields} : i))
     // Persist (the data layer maps camelCase -> DB columns and skips empty patches)
@@ -4075,6 +4156,16 @@ export default function OpsBoard() {
   const onNextSt = (id, newSt) => {
     if (newSt === 'done') saveDoneTs(id)
     onItemChange(id, { status:newSt, estadoSheet:ST_TO_SHEET[newSt]||'No iniciado' })
+  }
+
+  const addRelation = async rel => {
+    const created = await apiAddRelation(rel)          // lanza si crea un ciclo, duplicado o autodependencia
+    setRelations(prev => [...prev.filter(r => r.id !== created.id), created])
+    return created
+  }
+  const removeRelation = async id => {
+    await apiRemoveRelation(id)
+    setRelations(prev => prev.filter(r => r.id !== id))
   }
 
   const proyectosConOv = proyectos.map(p => {
@@ -4351,7 +4442,7 @@ export default function OpsBoard() {
               {vista === 'Tablero' && (
                 <Tablero items={allItems} catF={catF} setCatF={setCatF} asF={asF} setAsF={setAsF}
                   owners={owners} setItem={setItemActivo} onNextSt={onNextSt} modo={modo} setModo={setModo}
-                  onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} />
+                  onNuevo={() => setShowNuevo(true)} onUnifyTema={onUnifyTema} blockedIds={blockedIds} />
               )}
               {vista === '📊 Portfolio'       && <PortfolioView projects={proyectos} items={allItems} supported={BACKEND === 'pm'} owners={KNOWN_OWNERS} onProjectChange={onProjectChange} onOpenItem={item => setItemActivo(item)} ui={{ C, Tag, fmtFecha }} api={{ listHitos }} />}
               {vista === '🗂️ Proyectos'        && <Proyectos proyectos={proyectosConOv} allItems={allItems} onAddTema={addLocalItem} onOpenItem={item => setItemActivo(item)} onUpdate={onProyUpdate} onItemChange={onItemChange} lang={lang} />}
@@ -4364,7 +4455,7 @@ export default function OpsBoard() {
               {vista === '📋 Reporte Semanal' && <Cristina items={allItems} proyectos={proyectos} idioma={lang.toUpperCase()} onDeleteItem={async (id) => {
                 const it = items.find(i => i.id === id)
                 if (!window.confirm(`¿Borrar el tema "${it?.tema || id}"? Esta acción no se puede deshacer.`)) return
-                await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id))
+                await deleteItem(id); setItems(prev => prev.filter(i => i.id !== id)); setRelations(prev => prev.filter(r => r.fromId !== id && r.toId !== id))
               }} />}
               {vista === '⧆ Histórico'        && <Historico items={allItems} />}
             </>
@@ -4386,6 +4477,7 @@ export default function OpsBoard() {
             else setItemActivo(null)
           }}
           proyectoNames={proyectos.map(p => p.nombre)}
+          relations={relations} allItems={allItems} onAddRelation={addRelation} onRemoveRelation={removeRelation}
           onToast={msg => setToast(msg)} />
       )}
       {showIntake && (
