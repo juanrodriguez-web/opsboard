@@ -1,6 +1,6 @@
 // Shows the app only to a signed-in person (e-mail + password) who exists in OpsBoard (people.email). Off unless VITE_REQUIRE_AUTH=true.
 // On success it stores the identity the app already uses for "My Work" (opsboard-me), so the rest of the app needs no change.
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AUTH_REQUIRED, getSession, onSessionChange, signInWithPassword, signOut } from './lib/auth.js'
 import { findPersonByEmail } from './lib/api/index.js'
 
@@ -52,10 +52,16 @@ function Gate({ children }) {
   const [session, setSession] = useState(undefined)      // undefined = still checking
   const [person, setPerson] = useState(undefined)         // undefined = checking, null = not in people
   const [err, setErr] = useState('')
+  const lastEmailRef = useRef(undefined)
   useEffect(() => {
     let alive = true
     getSession().then(s => { if (alive) setSession(s) }).catch(() => { if (alive) setSession(null) })
-    const off = onSessionChange(s => { if (alive) { setSession(s); setPerson(undefined) } })
+    const off = onSessionChange(s => {
+      if (!alive) return
+      setSession(s)
+      const newEmail = s?.user?.email
+      if (newEmail !== lastEmailRef.current) { lastEmailRef.current = newEmail; setPerson(undefined) }
+    })
     return () => { alive = false; off() }
   }, [])
   const email = session?.user?.email
